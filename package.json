@@ -69,7 +69,7 @@
               },
               "mime": {
                 "type": "string",
-                "const": "application/vnd.cinatra.dashboard.v12+json"
+                "const": "application/vnd.cinatra.dashboard+json"
               },
               "size": {
                 "type": "number"
