@@ -132,7 +132,7 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
     }
     // The formless dashboard row pins its representation media type in-schema.
     expect((props.mime as { const?: string })?.const).toBe(
-      "application/vnd.cinatra.dashboard.v12+json",
+      "application/vnd.cinatra.dashboard+json",
     );
     expect(claim.schema?.required).toEqual([
       "artifactType",
@@ -145,9 +145,11 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
     ]);
   });
 
-  it("exposes the envelope-versioned dashboard media type constant", () => {
+  // The host's dashboard writer stores this form on every dashboard resource:
+  // DASHBOARD_RESOURCE_MIME in src/lib/dashboards/dashboard-artifact-twin-writer.ts.
+  it("exposes the dashboard media type constant equal to the host writer's form", () => {
     expect(DASHBOARD_ARTIFACT_MEDIA_TYPE).toBe(
-      "application/vnd.cinatra.dashboard.v12+json",
+      "application/vnd.cinatra.dashboard+json",
     );
   });
 

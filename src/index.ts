@@ -32,13 +32,12 @@ import type { SemanticArtifactManifest } from "@cinatra-ai/sdk-extensions";
 // the two are kept in agreement by `tests/manifest.test.ts`.
 
 /**
- * The dashboard representation media type (envelope-versioned; drizzle-cube
- * nested). The published `v12`-suffixed dashboard envelope the content-hashed
- * representation resource carries, and the media type the B2 first-party
- * representation viewer registers against. Grounded in D7 (epic cinatra#1883).
+ * The dashboard representation media type: the form the host's dashboard
+ * writer stores on every dashboard's representation resource, and the media
+ * type the first-party representation viewer registers against.
  */
 export const DASHBOARD_ARTIFACT_MEDIA_TYPE =
-  "application/vnd.cinatra.dashboard.v12+json" as const;
+  "application/vnd.cinatra.dashboard+json" as const;
 
 /**
  * The single generic object type every dashboard twin row carries. Namespaced
