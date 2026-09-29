@@ -16,10 +16,11 @@ import type { SemanticArtifactManifest } from "@cinatra-ai/sdk-extensions";
 //     assertions minted by meaning-type `*-dashboard-artifact` packs (D8),
 //     never as a distinct row type.
 //
+// The pack ships its dashboard display (cinatra#3092): one `detail` renderer
+// that draws a dashboard's pinned configuration through the shared read-only
+// composition the host serves.
+//
 // Deliberately NOT shipped here (later slices / host-side):
-//   - NO renderer / `ui` bundle. The first-party representation viewer for the
-//     dashboard media type is a HOST registration wired in B2, not an
-//     extension-shipped renderer.
 //   - NO twin writer. `writeDashboardArtifactTwin` + the complete mutation
 //     pairing table + the AST-gate extension are slice B1b.
 //   - NO backfill. Re-stamping existing dashboards is slice B1c.
@@ -50,6 +51,17 @@ export const DASHBOARD_ARTIFACT_OBJECT_TYPE =
 export const dashboardArtifactManifest: SemanticArtifactManifest = {
   accepts: {
     dashboard: true,
+  },
+  ui: {
+    abiVersion: 1,
+    sdkAbiRange: "^2.5.0",
+    renderers: {
+      detail: {
+        entry: "./src/renderers/detail.tsx",
+        propsApiVersion: 3,
+        representations: [DASHBOARD_ARTIFACT_MEDIA_TYPE],
+      },
+    },
   },
   objectTypes: [
     {
