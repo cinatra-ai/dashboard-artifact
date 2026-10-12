@@ -4,7 +4,12 @@
 // one place.
 //
 // The content is the channel's `configuration` kind: the dashboard's pinned
-// configuration as the revision recorded it, with its digest.
+// configuration as the revision recorded it, with its digest. The host pins the
+// configuration AS STORED — the apiVersion 1.2 envelope the dashboards
+// writer wraps every dashboard in (cinatra packages/dashboards
+// src/v12-envelope.ts `wrapDcAsV12`, pinned by `twinCtx` in
+// src/mutation-service.ts) — so the default snapshot carries that envelope, and
+// `CONFIGURATION` is its analytics body, the dashboard the composition draws.
 
 import type { ArtifactContentProjection } from "../src/artifact-content-channel";
 import type { ArtifactRendererProps } from "../src/artifact-renderer-props";
@@ -19,7 +24,7 @@ export const OPEN_LIVE = "/dashboards/d1";
 
 export const PORTLET_TITLES = ["Qualified pipeline", "Win rate", "Cycle time"] as const;
 
-/** The pinned configuration: three portlets on the drawing's grid. */
+/** The analytics body: three portlets on the drawing's grid. */
 export const CONFIGURATION = {
   portlets: [
     { id: "p1", title: "Qualified pipeline", chartType: "kpiNumber", x: 0, y: 0, w: 4, h: 3 },
@@ -28,8 +33,27 @@ export const CONFIGURATION = {
   ],
 };
 
+/** The stored envelope around an analytics body, exactly as the writer wraps
+ * one: one fixed `analytics` portlet whose `config.dashboard` is the body. */
+export function storedEnvelope(
+  body: unknown,
+  portlets: (analytics: Record<string, unknown>) => unknown[] = (analytics) => [analytics],
+): Record<string, unknown> {
+  const analytics = {
+    instanceId: "analytics",
+    kind: "analytics",
+    version: "1.0.0",
+    slot: "fixed",
+    config: { dashboard: body },
+  };
+  return { apiVersion: "v1.2", scopeLevel: "workspace", portlets: portlets(analytics) };
+}
+
+/** The pinned configuration as the host pins it: the stored envelope. */
+export const PINNED_CONFIGURATION = storedEnvelope(CONFIGURATION);
+
 export function configurationContent(
-  configuration: unknown = CONFIGURATION,
+  configuration: unknown = PINNED_CONFIGURATION,
 ): ArtifactContentProjection {
   return {
     kind: "configuration",

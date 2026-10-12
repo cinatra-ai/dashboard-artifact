@@ -17,12 +17,14 @@ import {
   CONFIGURATION,
   DATA_ROAD,
   OPEN_LIVE,
+  PINNED_CONFIGURATION,
   PORTLET_TITLES,
   REVISION_ID,
   configurationContent,
   noContent,
   props,
   propsWithoutRoad,
+  storedEnvelope,
   textContent,
 } from "./props-fixture";
 
@@ -177,6 +179,75 @@ describe("the dashboard display", () => {
       expect((floor!.textContent ?? "").trim().length).toBeGreaterThan(0);
       cleanup();
     }
+  });
+
+  it("draws the analytics body of the stored envelope, never the envelope", () => {
+    // The default snapshot pins the envelope the writer stores.
+    const pinned = props();
+    expect(pinned.content).toMatchObject({ configuration: PINNED_CONFIGURATION });
+
+    const { container } = render(<Detail {...pinned} />);
+    const found = doubles(container);
+    expect(found).toHaveLength(1);
+    const received = JSON.parse(found[0]!.textContent ?? "null") as Record<string, unknown>;
+    expect(received.config).toEqual(CONFIGURATION);
+    expect(received.config).not.toHaveProperty("apiVersion");
+    cleanup();
+
+    // The analytics portlet is found by its kind, the alias included, beside
+    // another portlet and under another instance id.
+    const aliased = storedEnvelope(CONFIGURATION, (analytics) => [
+      { instanceId: "launch", kind: "launcher", version: "1.0.0", slot: "fixed", config: {} },
+      { ...analytics, instanceId: "main", kind: "cube-dashboard" },
+    ]);
+    const second = render(<Detail {...props(configurationContent(aliased))} />).container;
+    const aliasedReceived = JSON.parse(doubles(second)[0]!.textContent ?? "null") as Record<string, unknown>;
+    expect(aliasedReceived.config).toEqual(CONFIGURATION);
+  });
+
+  it("draws the no-series tiles of the stored envelope's analytics body", () => {
+    const { container } = render(<Detail {...propsWithoutRoadFor(PINNED_CONFIGURATION)} />);
+    const tiles = Array.from(container.querySelectorAll<HTMLElement>("[data-dashboard-tile]"));
+    expect(tiles.map((tile) => tile.textContent)).toEqual(PORTLET_TITLES.map((title) => `${title}—`));
+  });
+
+  it("floors a stored envelope that carries no drawable analytics body", () => {
+    const cases = [
+      storedEnvelope(CONFIGURATION, () => [
+        { instanceId: "launch", kind: "launcher", version: "1.0.0", slot: "fixed", config: {} },
+      ]),
+      storedEnvelope(undefined),
+      storedEnvelope("not a dashboard"),
+      storedEnvelope({ portlets: "invalid" }),
+    ];
+    for (const configuration of cases) {
+      for (const snapshot of [props(configurationContent(configuration)), propsWithoutRoadFor(configuration)]) {
+        const { container } = render(<Detail {...snapshot} />);
+        expect(doubles(container)).toHaveLength(0);
+        const floor = container.querySelector<HTMLElement>('[data-dashboard-artifact="floor"]');
+        expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-without-portlets");
+        cleanup();
+      }
+    }
+  });
+
+  it("keeps each tile's pinned rows, so tiles on different rows never share one", () => {
+    // Portlets at (x 0, y 0, w 4) and (x 4, y 6, w 4): their columns do not
+    // overlap, so only their rows keep the lower one off the upper one's row.
+    const { container } = render(
+      <Detail
+        {...propsWithoutRoadFor({
+          portlets: [
+            { id: "a", title: "Upper left", x: 0, y: 0, w: 4, h: 3 },
+            { id: "b", title: "Lower middle", x: 4, y: 6, w: 4, h: 2 },
+          ],
+        })}
+      />,
+    );
+    const tiles = Array.from(container.querySelectorAll<HTMLElement>("[data-dashboard-tile]"));
+    expect(tiles.map((tile) => tile.textContent)).toEqual(["Upper left—", "Lower middle—"]);
+    expect(tiles.map((tile) => tile.style.gridColumn)).toEqual(["1 / span 4", "5 / span 4"]);
+    expect(tiles.map((tile) => tile.style.gridRow)).toEqual(["1 / span 3", "7 / span 2"]);
   });
 
   it("carries no header strip and no decision control", () => {

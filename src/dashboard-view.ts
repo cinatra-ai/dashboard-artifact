@@ -21,9 +21,11 @@ export type DashboardFloorReason =
   | "configuration-not-object"
   | "configuration-without-portlets";
 
-/** One no-series tile: a portlet's title and its pinned column placement on
- * the dashboard's twelve-column grid (a CSS `grid-column` value). */
-export type DashboardTile = { title: string; column: string };
+/** One no-series tile: a portlet's title and its pinned placement on the
+ * dashboard's twelve-column grid — its columns (a CSS `grid-column` value) and
+ * its rows (a CSS `grid-row` value), so two portlets pinned on different rows
+ * never share one. */
+export type DashboardTile = { title: string; column: string; row: string };
 
 /** The data road the display hands the shared read-only composition. */
 export type DashboardDataRoad = { road: "session"; apiUrl: string };
@@ -34,7 +36,9 @@ export type DashboardView =
       kind: "dashboard";
       /** The revision the configuration was pinned at. */
       revisionId: string;
-      /** The pinned configuration, exactly as the channel projected it. */
+      /** The analytics body of the pinned configuration — the dashboard the
+       *  composition draws. The host pins the whole stored envelope; this is
+       *  its analytics portlet's `config.dashboard`, unchanged. */
       configuration: Record<string, unknown>;
       /** Each portlet's title, in the configuration's order; empty ones skipped. */
       portletTitles: string[];
@@ -73,6 +77,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+// THE STORED ENVELOPE (cinatra#3092). The host pins the dashboard's
+// configuration AS STORED: the apiVersion 1.2 envelope, whose analytics
+// portlet (kind `analytics`, or its alias `cube-dashboard`, matched by kind and
+// never by instanceId) carries the drawable dashboard at `config.dashboard`. The
+// composition draws that body, never the envelope. A configuration without the
+// envelope's apiVersion is read as a body itself.
+const ENVELOPE_API_VERSION = "v1.2";
+const ANALYTICS_KINDS: readonly string[] = ["analytics", "cube-dashboard"];
+
+/** The drawable body of a pinned configuration, or null when an envelope
+ * carries no analytics portlet with a dashboard object. */
+function analyticsBodyOf(configuration: Record<string, unknown>): Record<string, unknown> | null {
+  if (configuration.apiVersion !== ENVELOPE_API_VERSION) return configuration;
+  const portlets = Array.isArray(configuration.portlets) ? configuration.portlets : [];
+  const analytics = portlets.find(
+    (portlet): portlet is Record<string, unknown> =>
+      isRecord(portlet) && typeof portlet.kind === "string" && ANALYTICS_KINDS.includes(portlet.kind),
+  );
+  const config = analytics === undefined ? null : analytics.config;
+  const body = isRecord(config) ? config.dashboard : null;
+  return isRecord(body) ? body : null;
+}
+
 /** The portlets of a drawable configuration: an array whose every entry is an
  * object, else null — the composition lays out nothing else. */
 function portletsOf(configuration: Record<string, unknown>): Record<string, unknown>[] | null {
@@ -101,6 +128,15 @@ function columnOf(portlet: Record<string, unknown>): string {
   return `${x + 1} / span ${Math.min(w, GRID_COLUMNS - x)}`;
 }
 
+/** The pinned row placement: from the portlet's row, spanning its height. A
+ * portlet whose row or height is missing takes the next free row. */
+function rowOf(portlet: Record<string, unknown>): string {
+  const y = gridUnit(portlet.y);
+  const h = gridUnit(portlet.h);
+  if (y === null || h === null || h === 0) return "auto";
+  return `${y + 1} / span ${h}`;
+}
+
 function tilesOf(portlets: Record<string, unknown>[]): DashboardTile[] {
   return portlets
     .map((portlet, index) => ({ portlet, index, title: titleOf(portlet) }))
@@ -113,7 +149,7 @@ function tilesOf(portlets: Record<string, unknown>[]): DashboardTile[] {
       const bx = gridUnit(b.portlet.x) ?? 0;
       return ax !== bx ? ax - bx : a.index - b.index;
     })
-    .map((entry) => ({ title: entry.title, column: columnOf(entry.portlet) }));
+    .map((entry) => ({ title: entry.title, column: columnOf(entry.portlet), row: rowOf(entry.portlet) }));
 }
 
 function dataRoadOf(data: unknown): DashboardDataRoad | null {
@@ -147,14 +183,15 @@ export function resolveDashboardView(input: DashboardViewInput): DashboardView {
   if (!isRecord(content.configuration)) {
     return { kind: "floor", reason: "configuration-not-object" };
   }
-  const portlets = portletsOf(content.configuration);
-  if (portlets === null) {
+  const body = analyticsBodyOf(content.configuration);
+  const portlets = body === null ? null : portletsOf(body);
+  if (body === null || portlets === null) {
     return { kind: "floor", reason: "configuration-without-portlets" };
   }
   return {
     kind: "dashboard",
     revisionId: content.representationRevisionId,
-    configuration: content.configuration,
+    configuration: body,
     portletTitles: portlets.map(titleOf).filter((title): title is string => title !== null),
     tiles: tilesOf(portlets),
     dataRoad: dataRoadOf(input.data),

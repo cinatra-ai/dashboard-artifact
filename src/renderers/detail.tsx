@@ -65,7 +65,7 @@ export default function DashboardArtifactDetail(props: ArtifactRendererProps): R
             <div
               key={`${index}-${tile.title}`}
               className="soft-panel rounded-card p-4"
-              style={{ gridColumn: tile.column }}
+              style={{ gridColumn: tile.column, gridRow: tile.row }}
               data-dashboard-tile=""
             >
               <p className="text-sm text-muted-foreground">{tile.title}</p>
