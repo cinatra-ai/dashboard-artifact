@@ -59,7 +59,7 @@ export default function DashboardArtifactDetail(props: ArtifactRendererProps): R
       >
         <div
           className="grid gap-4"
-          style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))" }}
+          style={{ gridTemplateColumns: `repeat(${view.columns}, minmax(0, 1fr))` }}
         >
           {view.tiles.map((tile, index) => (
             <div

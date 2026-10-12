@@ -20,10 +20,20 @@
 // implementation. Not a dependency on the specifier: a type-only ambient
 // declaration adds nothing to package.json. It is a global script (no
 // top-level import or export), so the declaration stays ambient.
+//
+// THE CONFIGURATION IT TAKES. The host's composition passes `config` to
+// drizzle-cube's DashboardProvider, typed `DashboardConfig` (drizzle-cube
+// 0.6.6, dist/client/types.d.ts): it requires `portlets`, and of each portlet
+// `id`, `title`, `w`, `h`, `x` and `y`; every other field is optional. This
+// declaration states exactly that required part, so the standalone `tsc` refuses
+// a display that hands the composition anything looser, as the host does.
 
 declare module "@cinatra-ai/sdk-dashboard/components" {
+  export type DashboardConfig = {
+    portlets: { id: string; title: string; w: number; h: number; x: number; y: number }[];
+  };
   export function ReadOnlyComposedDashboard(props: {
-    config: Record<string, unknown>;
+    config: DashboardConfig;
     dataRoad?: { readonly road: "session"; readonly apiUrl: string };
   }): import("react").ReactElement;
 }

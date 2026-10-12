@@ -250,6 +250,68 @@ describe("the dashboard display", () => {
     expect(tiles.map((tile) => tile.style.gridRow)).toEqual(["1 / span 3", "7 / span 2"]);
   });
 
+  it("lays the tiles out on the pinned grid's own column count", () => {
+    // A 24-column grid with two adjacent 12-column tiles: each keeps its own
+    // half, and the grid draws 24 columns.
+    const { container } = render(
+      <Detail
+        {...propsWithoutRoadFor(
+          storedEnvelope({
+            grid: { cols: 24, rowHeight: 80, minW: 2, minH: 2 },
+            portlets: [
+              { id: "l", title: "Left half", x: 0, y: 0, w: 12, h: 3 },
+              { id: "r", title: "Right half", x: 12, y: 0, w: 12, h: 3 },
+            ],
+          }),
+        )}
+      />,
+    );
+    const tiles = Array.from(container.querySelectorAll<HTMLElement>("[data-dashboard-tile]"));
+    expect(tiles.map((tile) => tile.textContent)).toEqual(["Left half—", "Right half—"]);
+    expect(tiles.map((tile) => tile.style.gridColumn)).toEqual(["1 / span 12", "13 / span 12"]);
+    expect(tiles.map((tile) => tile.style.gridRow)).toEqual(["1 / span 3", "1 / span 3"]);
+    expect(tiles[0]!.parentElement!.style.gridTemplateColumns).toBe("repeat(24, minmax(0, 1fr))");
+    cleanup();
+
+    // A configuration that names no grid columns keeps the twelve-column grid.
+    const twelve = render(<Detail {...propsWithoutRoadFor(PINNED_CONFIGURATION)} />).container;
+    const first = twelve.querySelector<HTMLElement>("[data-dashboard-tile]");
+    expect(first!.parentElement!.style.gridTemplateColumns).toBe("repeat(12, minmax(0, 1fr))");
+    cleanup();
+
+    // A grid whose column count cannot be read floors by name, never as twelve.
+    for (const grid of [{ cols: 0 }, { cols: "24" }, "24"]) {
+      const floored = render(
+        <Detail {...propsWithoutRoadFor(storedEnvelope({ grid, portlets: CONFIGURATION.portlets }))} />,
+      ).container;
+      const floor = floored.querySelector<HTMLElement>('[data-dashboard-artifact="floor"]');
+      expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-grid-unreadable");
+      cleanup();
+    }
+  });
+
+  it("hands the composition only the portlets it can draw", () => {
+    const body = {
+      portlets: [
+        ...CONFIGURATION.portlets,
+        { id: "no-place", title: "Unplaced" },
+        { title: "No id", x: 0, y: 9, w: 4, h: 3 },
+        null,
+      ],
+    };
+    const { container } = render(<Detail {...props(configurationContent(storedEnvelope(body)))} />);
+    const received = JSON.parse(doubles(container)[0]!.textContent ?? "null") as Record<string, unknown>;
+    expect(received.config).toEqual(CONFIGURATION);
+    cleanup();
+
+    // Portlets listed, none of them drawable: a named floor, never an empty composition.
+    const undrawable = { portlets: [{ id: "no-place", title: "Unplaced" }, null] };
+    const floored = render(<Detail {...props(configurationContent(storedEnvelope(undrawable)))} />).container;
+    expect(doubles(floored)).toHaveLength(0);
+    const floor = floored.querySelector<HTMLElement>('[data-dashboard-artifact="floor"]');
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-without-portlets");
+  });
+
   it("carries no header strip and no decision control", () => {
     const snapshots = [
       props(),
