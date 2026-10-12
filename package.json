@@ -5,7 +5,8 @@
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "files": [
-    "src"
+    "src",
+    "!src/__tests__"
   ],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -14,7 +15,9 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@cinatra-ai/sdk-extensions": "*"
+    "@cinatra-ai/sdk-extensions": "*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "peerDependenciesMeta": {
     "@cinatra-ai/sdk-extensions": {
@@ -22,7 +25,14 @@
     }
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.1.0",
     "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^25.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   },
@@ -38,6 +48,19 @@
     "artifact": {
       "accepts": {
         "dashboard": true
+      },
+      "ui": {
+        "abiVersion": 1,
+        "sdkAbiRange": "^2.5.0",
+        "renderers": {
+          "detail": {
+            "entry": "./src/renderers/detail.tsx",
+            "propsApiVersion": 3,
+            "representations": [
+              "application/vnd.cinatra.dashboard+json"
+            ]
+          }
+        }
       },
       "objectTypes": [
         {
@@ -103,6 +126,13 @@
           }
         }
       ]
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./src/renderers/detail": {
+      "import": "./src/renderers/detail.tsx",
+      "default": "./src/renderers/detail.tsx"
     }
   }
 }

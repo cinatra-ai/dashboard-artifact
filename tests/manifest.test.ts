@@ -77,11 +77,23 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
     }
   });
 
-  it("ships NO ui bundle and NO matcher skill (host viewer + twin-writer minted)", () => {
-    // The first-party representation viewer is a HOST registration (B2), not an
-    // extension-shipped renderer. Dashboards are minted by the twin writer, not
-    // classified from an upload — so no matcher skill bundle either.
-    expect("ui" in pkg.cinatra.artifact).toBe(false);
+  it("ships ONE display for the dashboard form and NO matcher skill", () => {
+    // The pack ships its own dashboard display (cinatra#3092): one `detail`
+    // renderer over the dashboard media type, at the props version whose
+    // snapshot carries the review reading and the data road. Dashboards are
+    // minted by the twin writer, not classified from an upload — so no matcher
+    // skill bundle.
+    expect(pkg.cinatra.artifact.ui).toEqual({
+      abiVersion: 1,
+      sdkAbiRange: "^2.5.0",
+      renderers: {
+        detail: {
+          entry: "./src/renderers/detail.tsx",
+          propsApiVersion: 3,
+          representations: ["application/vnd.cinatra.dashboard+json"],
+        },
+      },
+    });
     expect("skills" in pkg.cinatra.artifact).toBe(false);
   });
 
@@ -155,6 +167,7 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
 
   it("keeps the typed src manifest in agreement with package.json", () => {
     expect(dashboardArtifactManifest.accepts).toEqual(pkg.cinatra.artifact.accepts);
+    expect((dashboardArtifactManifest as { ui?: unknown }).ui).toEqual(pkg.cinatra.artifact.ui);
     expect(dashboardArtifactManifest.objectTypes).toEqual(pkg.cinatra.artifact.objectTypes);
     expect(DASHBOARD_ARTIFACT_OBJECT_TYPE).toBe(
       pkg.cinatra.artifact.objectTypes![0]!.type,
