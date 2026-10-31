@@ -18,6 +18,11 @@
 //     fetches nothing.
 // A snapshot it cannot draw becomes a NAMED floor, never a blank.
 //
+// NO LOADING OR ERROR READING YET: the drawing declares both, and a state belongs
+// on `data-display-state` only when it is true. The composition reads the numbers
+// and hands this display no state of that read, so this display cannot tell either
+// one, and the attribute is not drawn. A floor is not the error reading.
+//
 // NO HEADER STRIP: the display draws the work and nothing about itself — no
 // heading, no button, no download and no package name.
 //
@@ -51,6 +56,7 @@ export default function DashboardArtifactDetail(props: ArtifactRendererProps): R
       <article
         className="soft-panel rounded-card overflow-hidden p-6"
         data-conformance-id={DISPLAY_ID}
+        data-kind="artifact"
         data-dashboard-artifact="floor"
         data-dashboard-floor={view.reason}
         data-props-api-version={ARTIFACT_RENDERER_PROPS_API_VERSION}
@@ -67,6 +73,7 @@ export default function DashboardArtifactDetail(props: ArtifactRendererProps): R
       <article
         className="overflow-hidden"
         data-conformance-id={DISPLAY_ID}
+        data-kind="artifact"
         data-dashboard-artifact="no-series"
         data-revision={view.revisionId}
         data-props-api-version={ARTIFACT_RENDERER_PROPS_API_VERSION}
@@ -107,6 +114,7 @@ export default function DashboardArtifactDetail(props: ArtifactRendererProps): R
     <article
       className="overflow-hidden"
       data-conformance-id={DISPLAY_ID}
+      data-kind="artifact"
       data-dashboard-artifact="dashboard"
       data-revision={view.revisionId}
       data-props-api-version={ARTIFACT_RENDERER_PROPS_API_VERSION}

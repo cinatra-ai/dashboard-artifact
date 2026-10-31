@@ -5,7 +5,7 @@ import type { SemanticArtifactManifest } from "@cinatra-ai/sdk-extensions";
 //
 // Every dashboard gets a paired `objects` row of this ONE generic type so the
 // artifact library, permissions, and scopes can treat dashboards as first-class
-// artifacts. This pack ships MANIFEST + TYPE only:
+// artifacts. This pack ships MANIFEST + TYPE + its display:
 //   - `accepts.dashboard: true` — the dashboard REPRESENTATION FORM the
 //     substrate already models (the `file`/`connectorRef`/`dashboard` form enum
 //     the host artifact-handler validates); a dashboard is a formless,

@@ -2,8 +2,7 @@
 // dashboard artifact's pinned configuration through the shared read-only
 // composition, says that the configuration is frozen and the numbers are
 // current, draws the no-series reading where the surface hands it no data road,
-// and draws the live-dashboard navigation only in the continued reading of a
-// review.
+// and draws the live-dashboard navigation unless a review is still open.
 //
 // The composition is the test-only double vitest.config.ts aliases onto its
 // exact id; these arms read what the display HANDED it, never how the real
@@ -181,6 +180,16 @@ describe("the dashboard display", () => {
     }
   });
 
+  it("floors content of another kind even when it carries a drawable configuration", () => {
+    // Only the configuration kind of the content channel is read. A projection
+    // of another kind is not read for its fields, whatever it carries.
+    const other = { ...configurationContent(), kind: "text" } as unknown as ReturnType<typeof configurationContent>;
+    const { container } = render(<Detail {...props(other)} />);
+    expect(doubles(container)).toHaveLength(0);
+    const floor = container.querySelector<HTMLElement>('[data-dashboard-artifact="floor"]');
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("content-not-configuration");
+  });
+
   it("draws the analytics body of the stored envelope, never the envelope", () => {
     // The default snapshot pins the envelope the writer stores.
     const pinned = props();
@@ -219,6 +228,9 @@ describe("the dashboard display", () => {
       storedEnvelope(undefined),
       storedEnvelope("not a dashboard"),
       storedEnvelope({ portlets: "invalid" }),
+      storedEnvelope({ portlets: [] }),
+      { apiVersion: "v1.1", portlets: CONFIGURATION.portlets },
+      storedEnvelope(CONFIGURATION, (analytics) => [analytics, { ...analytics, instanceId: "second" }]),
     ];
     for (const configuration of cases) {
       for (const snapshot of [props(configurationContent(configuration)), propsWithoutRoadFor(configuration)]) {
@@ -280,7 +292,7 @@ describe("the dashboard display", () => {
     cleanup();
 
     // A grid whose column count cannot be read floors by name, never as twelve.
-    for (const grid of [{ cols: 0 }, { cols: "24" }, "24"]) {
+    for (const grid of [{ cols: 0 }, { cols: -1 }, { cols: 1.5 }, { cols: "24" }, "24"]) {
       const floored = render(
         <Detail {...propsWithoutRoadFor(storedEnvelope({ grid, portlets: CONFIGURATION.portlets }))} />,
       ).container;
@@ -290,26 +302,17 @@ describe("the dashboard display", () => {
     }
   });
 
-  it("hands the composition only the portlets it can draw", () => {
-    const body = {
-      portlets: [
-        ...CONFIGURATION.portlets,
-        { id: "no-place", title: "Unplaced" },
-        { title: "No id", x: 0, y: 9, w: 4, h: 3 },
-        null,
-      ],
-    };
-    const { container } = render(<Detail {...props(configurationContent(storedEnvelope(body)))} />);
+  it("hands the composition every portlet, or floors the whole configuration", () => {
+    const { container } = render(<Detail {...props(configurationContent(storedEnvelope(CONFIGURATION)))} />);
     const received = JSON.parse(doubles(container)[0]!.textContent ?? "null") as Record<string, unknown>;
     expect(received.config).toEqual(CONFIGURATION);
     cleanup();
 
-    // Portlets listed, none of them drawable: a named floor, never an empty composition.
-    const undrawable = { portlets: [{ id: "no-place", title: "Unplaced" }, null] };
-    const floored = render(<Detail {...props(configurationContent(storedEnvelope(undrawable)))} />).container;
+    const lostOne = { portlets: [...CONFIGURATION.portlets, { id: "no-place", title: "Unplaced" }] };
+    const floored = render(<Detail {...props(configurationContent(storedEnvelope(lostOne)))} />).container;
     expect(doubles(floored)).toHaveLength(0);
     const floor = floored.querySelector<HTMLElement>('[data-dashboard-artifact="floor"]');
-    expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-without-portlets");
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-portlet-unreadable");
   });
 
   it("carries no header strip and no decision control", () => {

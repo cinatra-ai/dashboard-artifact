@@ -15,7 +15,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import Detail from "../src/renderers/detail";
 import type { ArtifactRendererProps } from "../src/artifact-renderer-props";
-import { OPEN_LIVE, artifactWithSource, props, propsWithoutRoad } from "./props-fixture";
+import {
+  CONFIGURATION,
+  OPEN_LIVE,
+  artifactWithSource,
+  configurationContent,
+  props,
+  propsWithoutRoad,
+} from "./props-fixture";
 
 const PENDING = { reading: "pending", openLive: null } as const;
 const CONTINUED = { reading: "continued", openLive: OPEN_LIVE } as const;
@@ -118,6 +125,11 @@ describe("the six readings of the dashboard display", () => {
     "https://example.test/dashboards/d1",
     "HTTPS://example.test/dashboards/d1",
     "/dashboards/d1?tab=a%20b#top",
+    "https://example.test",
+    "https://example.test:8443/d1?a=b#top",
+    "https://example.test?a=b",
+    "https://example.test#top",
+    "https://example.test/user@d1",
   ])("draws the link for the address %s", (sourceUrl) => {
     const { container } = render(<Detail {...props(undefined, { artifact: artifactWithSource(sourceUrl) })} />);
     expect(container.querySelector(OPEN_LIVE_BINDING)?.getAttribute("href")).toBe(sourceUrl);
@@ -149,7 +161,11 @@ describe("the six readings of the dashboard display", () => {
     ["a user and a password", addressNaming(["alice", "pw"].join(":"))],
     ["a user alone", addressNaming("alice")],
     ["a password alone", addressNaming(":pw")],
+    ["an empty user part", addressNaming("")],
+    ["an empty user and password", addressNaming(":")],
     ["an empty address", ""],
+    ["an empty host with a port", "https://:80/d1"],
+    ["a host that does not parse", "https://[/d1"],
   ])("draws no link for %s", (_name, sourceUrl) => {
     const { container } = render(<Detail {...props(undefined, { artifact: artifactWithSource(sourceUrl) })} />);
     expect(container.querySelectorAll(OPEN_LIVE_BINDING)).toHaveLength(0);
@@ -202,11 +218,118 @@ describe("the six readings of the dashboard display", () => {
     }
   });
 
-  it("names the display on its floor, so the error state is the same surface", () => {
+  it("names the display and its kind on its floor", () => {
     const { container } = render(<Detail {...props(undefined, { propsApiVersion: 4 })} />);
     const floor = container.querySelector('[data-conformance-id="dashboard-display"]');
+    expect(floor?.getAttribute("data-kind")).toBe("artifact");
     expect(floor?.getAttribute("data-dashboard-artifact")).toBe("floor");
     expect(floor?.getAttribute("data-dashboard-floor")).toBe("props-version");
+  });
+
+  it.each(READINGS)("carries the artifact kind and no display state: $name", ({ snapshot }) => {
+    const { container } = render(<Detail {...snapshot} />);
+    const panel = container.querySelector('[data-conformance-id="dashboard-display"]');
+    expect(panel?.getAttribute("data-kind")).toBe("artifact");
+    expect(panel?.hasAttribute("data-display-state")).toBe(false);
+  });
+
+  it.each([
+    ["no id", { id: undefined }],
+    ["an empty id", { id: "" }],
+    ["an id that is a number", { id: 1 }],
+    ["no title", { title: undefined }],
+    ["an empty title", { title: "" }],
+    ["a title that is a number", { title: 1 }],
+    ["x below 0", { x: -1 }],
+    ["x not whole", { x: 1.5 }],
+    ["x a string", { x: "0" }],
+    ["no x", { x: undefined }],
+    ["y below 0", { y: -1 }],
+    ["y not whole", { y: 1.5 }],
+    ["no y", { y: undefined }],
+    ["w of 0", { w: 0 }],
+    ["w not whole", { w: 1.5 }],
+    ["no w", { w: undefined }],
+    ["h of 0", { h: 0 }],
+    ["h not whole", { h: 1.5 }],
+    ["no h", { h: undefined }],
+  ])("floors a configuration with a portlet of %s", (_name, change) => {
+    const portlets = [{ ...CONFIGURATION.portlets[0]!, ...change }, CONFIGURATION.portlets[1]!];
+    const { container } = render(<Detail {...props(configurationContent({ portlets }))} />);
+    const floor = container.querySelector('[data-conformance-id="dashboard-display"]');
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-portlet-unreadable");
+  });
+
+  it.each([
+    ["null", null],
+    ["a string", "portlet"],
+    ["a list", [CONFIGURATION.portlets[0]]],
+  ])("floors a configuration with a portlet entry that is %s", (_name, entry) => {
+    const portlets = [entry, CONFIGURATION.portlets[1]!];
+    const { container } = render(<Detail {...props(configurationContent({ portlets }))} />);
+    const floor = container.querySelector('[data-conformance-id="dashboard-display"]');
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-portlet-unreadable");
+  });
+
+  it("floors two portlets with one id", () => {
+    const portlets = [CONFIGURATION.portlets[0]!, { ...CONFIGURATION.portlets[1]!, id: CONFIGURATION.portlets[0]!.id }];
+    const { container } = render(<Detail {...props(configurationContent({ portlets }))} />);
+    const floor = container.querySelector('[data-conformance-id="dashboard-display"]');
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-portlet-unreadable");
+  });
+
+  it("draws the smallest place and size the rule allows", () => {
+    const portlets = [{ id: "p", title: "Small", x: 0, y: 0, w: 1, h: 1 }];
+    const { container } = render(<Detail {...propsWithoutRoad({ content: configurationContent({ portlets }) })} />);
+    const tile = container.querySelector<HTMLElement>("[data-dashboard-tile]");
+    expect(tile?.style.gridColumn).toBe("1 / span 1");
+    expect(tile?.style.gridRow).toBe("1 / span 1");
+  });
+
+  it("spans a tile past the grid over the whole row, and cuts a wide one at the edge", () => {
+    const portlets = [
+      { id: "past", title: "Past", x: 12, y: 0, w: 4, h: 1 },
+      { id: "wide", title: "Wide", x: 10, y: 1, w: 4, h: 1 },
+    ];
+    const { container } = render(<Detail {...propsWithoutRoad({ content: configurationContent({ portlets }) })} />);
+    const tiles = Array.from(container.querySelectorAll<HTMLElement>("[data-dashboard-tile]"));
+    expect(tiles.map((tile) => tile.style.gridColumn)).toEqual(["1 / -1", "11 / span 2"]);
+  });
+
+  it.each([
+    ["a null apiVersion", { apiVersion: null, portlets: CONFIGURATION.portlets }],
+    ["a number apiVersion", { apiVersion: 1.2, portlets: CONFIGURATION.portlets }],
+  ])("floors a configuration with %s", (_name, configuration) => {
+    const { container } = render(<Detail {...props(configurationContent(configuration))} />);
+    const floor = container.querySelector('[data-conformance-id="dashboard-display"]');
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-without-portlets");
+  });
+
+  it("reads a configuration that names no apiVersion as the body itself", () => {
+    const { container } = render(<Detail {...props(configurationContent(CONFIGURATION))} />);
+    expect(container.querySelector('[data-dashboard-artifact="dashboard"]')).not.toBeNull();
+  });
+
+  it.each([
+    ["a list", ["not an object"]],
+    ["a string", "not an object"],
+    ["null", null],
+  ])("floors a configuration that is %s", (_name, configuration) => {
+    const { container } = render(<Detail {...props(configurationContent(configuration))} />);
+    const floor = container.querySelector('[data-conformance-id="dashboard-display"]');
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("configuration-not-object");
+  });
+
+  it.each([
+    ["not an object", "session"],
+    ["another road", { road: "island", apiUrl: "/api/cube" }],
+    ["no address", { road: "session" }],
+    ["an empty address", { road: "session", apiUrl: "" }],
+    ["an address that is a number", { road: "session", apiUrl: 1 }],
+  ])("draws the no-series reading for a data road that is %s", (_name, data) => {
+    const snapshot = { ...props(), data } as unknown as ArtifactRendererProps;
+    const { container } = render(<Detail {...snapshot} />);
+    expect(container.querySelector('[data-dashboard-artifact="no-series"]')).not.toBeNull();
   });
 
   // "A display draws no typed sentence when a fact it needs is missing. A

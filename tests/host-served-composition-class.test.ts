@@ -29,6 +29,11 @@ describe("extension-kind-gate host-served composition class", () => {
     expect(isSdkOnlyViolation("@cinatra-ai/sdk-dashboard/other")).toBe(true);
   });
 
+  it("admits the other host-served package and its subpaths", () => {
+    expect(isSdkOnlyViolation("@cinatra-ai/design-primitives")).toBe(false);
+    expect(isSdkOnlyViolation("@cinatra-ai/design-primitives/button")).toBe(false);
+  });
+
   it("still reports a first-party package the host does not serve", () => {
     expect(isSdkOnlyViolation("@cinatra-ai/objects")).toBe(true);
   });

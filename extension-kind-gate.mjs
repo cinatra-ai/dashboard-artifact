@@ -40,7 +40,8 @@
 //       (mirrors extension-import-ban hostInternal, pinned empty).
 //     - SDK-only first-party deps: the only @cinatra-ai/* CODE deps permitted
 //       (source imports OR package.json deps/peer/optional) are
-//       @cinatra-ai/sdk-extensions + @cinatra-ai/sdk-ui (mirrors
+//       @cinatra-ai/sdk-extensions + @cinatra-ai/sdk-ui, and the host-served
+//       class HOST_SERVED_PACKAGES (mirrors
 //       extension-import-ban sdkOnly, pinned empty). This subsumes the
 //       cross-extension ban for the @cinatra-ai scope. (Standalone scope note
 //       below.)
@@ -777,7 +778,7 @@ export function validateCommon(packageRoot) {
     errors.push(`@/ host-internal import "${h}" — an extension reaches host capability ONLY through register(ctx) ports; remove the @/ import`);
   }
   for (const s of [...sdkOnly].sort()) {
-    errors.push(`non-SDK first-party dependency "${s}" — the only permitted @cinatra-ai code deps are @cinatra-ai/sdk-extensions and @cinatra-ai/sdk-ui; route everything else through register(ctx) host ports`);
+    errors.push(`non-SDK first-party dependency "${s}" — the only permitted @cinatra-ai code deps are @cinatra-ai/sdk-extensions, @cinatra-ai/sdk-ui and the host-served class; route everything else through register(ctx) host ports`);
   }
 
   // ---- 7. host-peer value-import ban over the serverEntry graph ----

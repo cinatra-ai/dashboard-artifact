@@ -2,9 +2,9 @@
 // authorized host snapshot to exactly one of two outcomes, and it is the only
 // place in this package that reads the content channel.
 //
-//   `dashboard` — the pinned configuration the revision recorded, the portlet
-//     titles in its order, the data road the surface handed (or none), and the
-//     live-dashboard address, unless a review is still open.
+//   `dashboard` — the pinned configuration the revision recorded, its tiles in
+//     their pinned reading order, the data road the surface handed (or none), and
+//     the live-dashboard address, unless a review is still open.
 //   `floor` — a NAMED reason it cannot be drawn. Never blank, never a throw: a
 //     display that threw would take the surface around it down with it.
 //
@@ -20,6 +20,7 @@ export type DashboardFloorReason =
   | "content-not-configuration"
   | "configuration-not-object"
   | "configuration-without-portlets"
+  | "configuration-portlet-unreadable"
   | "configuration-grid-unreadable";
 
 // THE COMPOSITION'S CONFIGURATION (cinatra#3092). The shared read-only
@@ -27,8 +28,7 @@ export type DashboardFloorReason =
 // `DashboardConfig` REQUIRES `portlets`, and of each portlet `id`, `title`, `x`,
 // `y`, `w` and `h`; every other field is optional. This package cannot see the
 // host's types, so it states that required part here, and the resolver hands
-// the composition only portlets that carry it, the rule by which the host's
-// own render path drops a portlet it cannot draw and keeps its siblings.
+// the composition a configuration only when every portlet carries it.
 
 /** One portlet as the composition requires it. */
 export type DashboardPortlet = { id: string; title: string; x: number; y: number; w: number; h: number };
@@ -37,9 +37,8 @@ export type DashboardPortlet = { id: string; title: string; x: number; y: number
 export type DashboardConfiguration = { portlets: DashboardPortlet[] };
 
 /** One no-series tile: a portlet's title and its pinned placement on the
- * dashboard's grid — its columns (a CSS `grid-column` value) and
- * its rows (a CSS `grid-row` value), so two portlets pinned on different rows
- * never share one. */
+ * dashboard's grid: its columns (a CSS `grid-column` value) and its rows (a CSS
+ * `grid-row` value). */
 export type DashboardTile = { title: string; column: string; row: string };
 
 /** The data road the display hands the shared read-only composition. */
@@ -53,17 +52,13 @@ export type DashboardView =
       revisionId: string;
       /** The analytics body of the pinned configuration — the dashboard the
        *  composition draws. The host pins the whole stored envelope; this is
-       *  its analytics portlet's `config.dashboard`, with only the portlets
-       *  the composition can draw. */
+       *  its analytics portlet's `config.dashboard`. */
       configuration: DashboardConfiguration;
       /** The pinned grid's column count: `grid.cols`, twelve only when the
        *  configuration names no grid columns. */
       columns: number;
-      /** Each portlet's title, in the configuration's order; empty ones skipped. */
-      portletTitles: string[];
-      /** The titled portlets in their pinned reading order (row, then column),
-       *  each with its pinned column placement — the layout the no-series
-       *  reading draws. */
+      /** The portlets in their pinned reading order (row, then column), each
+       *  with its pinned placement: the layout the no-series reading draws. */
       tiles: DashboardTile[];
       /** The surface's data road, or null where it handed none. */
       dataRoad: DashboardDataRoad | null;
@@ -86,6 +81,8 @@ const FLOOR_MESSAGES: Record<DashboardFloorReason, string> = {
     "This dashboard cannot be drawn: the configuration handed to this view is incomplete.",
   "configuration-without-portlets":
     "This dashboard cannot be drawn: the configuration handed to this view has no portlets it can lay out.",
+  "configuration-portlet-unreadable":
+    "This dashboard cannot be drawn: the configuration handed to this view has a portlet it cannot lay out.",
   "configuration-grid-unreadable":
     "This dashboard cannot be drawn: the configuration handed to this view has a grid it cannot lay out.",
 };
@@ -103,44 +100,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // configuration AS STORED: the apiVersion 1.2 envelope, whose analytics
 // portlet (kind `analytics`, or its alias `cube-dashboard`, matched by kind and
 // never by instanceId) carries the drawable dashboard at `config.dashboard`. The
-// composition draws that body, never the envelope. A configuration without the
-// envelope's apiVersion is read as a body itself.
+// composition draws that body, never the envelope. A configuration that names no
+// apiVersion is read as a body itself.
 const ENVELOPE_API_VERSION = "v1.2";
 const ANALYTICS_KINDS: readonly string[] = ["analytics", "cube-dashboard"];
 
-/** The drawable body of a pinned configuration, or null when an envelope
- * carries no analytics portlet with a dashboard object. */
+/** The drawable body of a pinned configuration: the configuration itself where
+ * it names no apiVersion, the one analytics portlet's dashboard object in an
+ * envelope, and null for any other apiVersion, for an envelope without exactly one
+ * analytics portlet, and for one whose dashboard is not an object. */
 function analyticsBodyOf(configuration: Record<string, unknown>): Record<string, unknown> | null {
-  if (configuration.apiVersion !== ENVELOPE_API_VERSION) return configuration;
+  if (configuration.apiVersion === undefined) return configuration;
+  if (configuration.apiVersion !== ENVELOPE_API_VERSION) return null;
   const portlets = Array.isArray(configuration.portlets) ? configuration.portlets : [];
-  const analytics = portlets.find(
+  const analytics = portlets.filter(
     (portlet): portlet is Record<string, unknown> =>
       isRecord(portlet) && typeof portlet.kind === "string" && ANALYTICS_KINDS.includes(portlet.kind),
   );
-  const config = analytics === undefined ? null : analytics.config;
+  if (analytics.length !== 1) return null;
+  const config = analytics[0]!.config;
   const body = isRecord(config) ? config.dashboard : null;
   return isRecord(body) ? body : null;
 }
 
-/** The portlets of a drawable configuration: the object entries of its
- * portlets array, else null. An entry that is not an object is a portlet the
- * composition cannot draw: it is left out and its siblings are kept. */
-function portletsOf(configuration: Record<string, unknown>): Record<string, unknown>[] | null {
-  const portlets = configuration.portlets;
-  if (!Array.isArray(portlets)) return null;
-  return portlets.filter(isRecord);
+function isNonEmptyString(value: unknown): boolean {
+  return typeof value === "string" && value.length > 0;
 }
 
-/** Whether a portlet carries every field the composition requires of it. */
-function isComposable(portlet: Record<string, unknown>): portlet is Record<string, unknown> & DashboardPortlet {
+function isIntegerFrom(value: unknown, minimum: number): boolean {
+  return Number.isInteger(value) && (value as number) >= minimum;
+}
+
+/** The one rule for a portlet the composition can draw: an id and a title that
+ * are non-empty strings, a place that is a whole number from 0, and a size that
+ * is a whole number from 1. */
+function isComposable(portlet: unknown): portlet is DashboardPortlet {
   return (
-    typeof portlet.id === "string" &&
-    portlet.id.length > 0 &&
-    titleOf(portlet) !== null &&
-    gridUnit(portlet.x) !== null &&
-    gridUnit(portlet.y) !== null &&
-    gridUnit(portlet.w) !== null &&
-    gridUnit(portlet.h) !== null
+    isRecord(portlet) &&
+    isNonEmptyString(portlet.id) &&
+    isNonEmptyString(portlet.title) &&
+    isIntegerFrom(portlet.x, 0) &&
+    isIntegerFrom(portlet.y, 0) &&
+    isIntegerFrom(portlet.w, 1) &&
+    isIntegerFrom(portlet.h, 1)
   );
 }
 
@@ -156,29 +158,18 @@ function gridColumnsOf(body: Record<string, unknown>): number | null {
   return typeof cols === "number" && Number.isInteger(cols) && cols > 0 ? cols : null;
 }
 
-function titleOf(portlet: Record<string, unknown>): string | null {
-  const title = portlet.title;
-  return typeof title === "string" && title.length > 0 ? title : null;
-}
-
-function gridUnit(value: unknown): number | null {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
-}
-
-/** The pinned column placement on the pinned grid of `columns` columns; a
- * portlet whose placement is out of range spans the whole row. */
+/** The pinned column placement on the pinned grid of `columns` columns. A
+ * portlet whose column lies past the grid spans the whole row, and one wider than
+ * the columns left is cut at the grid's edge. */
 function columnOf(portlet: DashboardPortlet, columns: number): string {
   const { x, w } = portlet;
-  if (w === 0 || x >= columns) return "1 / -1";
+  if (x >= columns) return "1 / -1";
   return `${x + 1} / span ${Math.min(w, columns - x)}`;
 }
 
-/** The pinned row placement: from the portlet's row, spanning its height. A
- * portlet whose row or height is missing takes the next free row. */
+/** The pinned row placement: from the portlet's row, spanning its height. */
 function rowOf(portlet: DashboardPortlet): string {
-  const { y, h } = portlet;
-  if (h === 0) return "auto";
-  return `${y + 1} / span ${h}`;
+  return `${portlet.y + 1} / span ${portlet.h}`;
 }
 
 function tilesOf(portlets: DashboardPortlet[], columns: number): DashboardTile[] {
@@ -213,16 +204,18 @@ function openLiveOf(review: unknown, artifact: unknown): string | null {
 // the characters of RFC 3986, so a space, a control character, a backslash and any
 // character outside ASCII refuse it: a browser drops or rewrites some of these, and
 // "/\t/host" or "/\\host" would leave the application. Its form is a root-relative
-// path, or an absolute http(s) address that parses and names no credentials.
+// path, or an absolute http(s) address that parses and whose authority part holds
+// a host and no user part, not even an empty one.
 const ADDRESS_CHARACTERS = /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/;
+const ABSOLUTE_ADDRESS = /^https?:\/\/[^/?#@]+(?:[/?#]|$)/i;
 
 function liveAddressOf(sourceUrl: unknown): string | null {
   if (typeof sourceUrl !== "string" || !ADDRESS_CHARACTERS.test(sourceUrl)) return null;
   if (/^\/(?!\/)/.test(sourceUrl)) return sourceUrl;
-  if (!/^https?:\/\/(?!\/)/i.test(sourceUrl)) return null;
+  if (!ABSOLUTE_ADDRESS.test(sourceUrl)) return null;
   try {
-    const url = new URL(sourceUrl);
-    return url.username === "" && url.password === "" ? sourceUrl : null;
+    new URL(sourceUrl);
+    return sourceUrl;
   } catch {
     return null;
   }
@@ -243,14 +236,14 @@ export function resolveDashboardView(input: DashboardViewInput): DashboardView {
     return { kind: "floor", reason: "configuration-not-object" };
   }
   const body = analyticsBodyOf(content.configuration);
-  const portlets = body === null ? null : portletsOf(body);
-  if (body === null || portlets === null) {
+  const portlets = body === null ? null : body.portlets;
+  if (body === null || !Array.isArray(portlets) || portlets.length === 0) {
     return { kind: "floor", reason: "configuration-without-portlets" };
   }
-  const composable = portlets.filter(isComposable);
-  // Portlets listed, none of them drawable: nothing for the composition to lay out.
-  if (composable.length === 0 && Array.isArray(body.portlets) && body.portlets.length > 0) {
-    return { kind: "floor", reason: "configuration-without-portlets" };
+  // "The layout is the pinned one", so a layout that lost a portlet is no reading:
+  // one portlet the composition cannot draw floors the whole configuration.
+  if (!portlets.every(isComposable) || new Set(portlets.map((portlet) => portlet.id)).size !== portlets.length) {
+    return { kind: "floor", reason: "configuration-portlet-unreadable" };
   }
   const columns = gridColumnsOf(body);
   if (columns === null) {
@@ -259,10 +252,9 @@ export function resolveDashboardView(input: DashboardViewInput): DashboardView {
   return {
     kind: "dashboard",
     revisionId: content.representationRevisionId,
-    configuration: { ...body, portlets: composable },
+    configuration: { ...body, portlets },
     columns,
-    portletTitles: composable.map((portlet) => portlet.title),
-    tiles: tilesOf(composable, columns),
+    tiles: tilesOf(portlets, columns),
     dataRoad: dataRoadOf(input.data),
     openLive: openLiveOf(input.review, input.artifact),
   };
