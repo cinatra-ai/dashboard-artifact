@@ -5,12 +5,12 @@
 // the line mounts in the reader's browser beside the data road it was handed,
 // so the server never writes a time.
 //
-// cinatra#3092, acceptance 6: the live-dashboard navigation is absent in the
-// pending reading and present in the continued one. The line draws the one
-// link only when it is handed an address, which the view resolver hands it only
-// in the continued reading.
+// The line draws the one live-dashboard link only when it is handed an address,
+// which the view resolver hands it unless a review is still open.
 
 import { useEffect, useState, type ReactElement } from "react";
+
+import OpenLiveLink from "./open-live-link";
 
 function twoDigits(value: number): string {
   return String(value).padStart(2, "0");
@@ -37,9 +37,7 @@ export default function ReadingLine({ openLive }: { openLive: string | null }): 
       {openLive !== null ? (
         <>
           {" "}
-          <a href={openLive} className="underline underline-offset-2">
-            Open live dashboard
-          </a>
+          <OpenLiveLink href={openLive} />
         </>
       ) : null}
     </p>

@@ -20,6 +20,7 @@ import {
   PINNED_CONFIGURATION,
   PORTLET_TITLES,
   REVISION_ID,
+  artifactWithSource,
   configurationContent,
   noContent,
   props,
@@ -69,7 +70,7 @@ describe("the dashboard display", () => {
     const root = container.firstElementChild as HTMLElement;
     expect(root.getAttribute("data-dashboard-artifact")).toBe("dashboard");
     expect(root.getAttribute("data-revision")).toBe(REVISION_ID);
-    expect(root.getAttribute("data-props-api-version")).toBe("3");
+    expect(root.getAttribute("data-props-api-version")).toBe("5");
   });
 
   it("says the configuration is frozen and the numbers are current", () => {
@@ -83,19 +84,25 @@ describe("the dashboard display", () => {
   });
 
   it("draws no live dashboard while the review is pending", () => {
-    render(<Detail {...props(undefined, { review: { reading: "pending", openLive: null } })} />);
+    const artifact = artifactWithSource();
+    render(<Detail {...props(undefined, { artifact, review: { reading: "pending", openLive: null } })} />);
     expect(liveLinks()).toHaveLength(0);
     cleanup();
 
     // A host that failed to null the address in the pending reading still gets
     // no link: the reading decides, never the address alone.
-    render(<Detail {...props(undefined, { review: { reading: "pending", openLive: OPEN_LIVE } })} />);
+    render(<Detail {...props(undefined, { artifact, review: { reading: "pending", openLive: OPEN_LIVE } })} />);
     expect(liveLinks()).toHaveLength(0);
   });
 
   it("draws the live dashboard once the review is continued", () => {
     const { container } = render(
-      <Detail {...props(undefined, { review: { reading: "continued", openLive: OPEN_LIVE } })} />,
+      <Detail
+        {...props(undefined, {
+          artifact: artifactWithSource(),
+          review: { reading: "continued", openLive: OPEN_LIVE },
+        })}
+      />,
     );
     const links = liveLinks();
     expect(links).toHaveLength(1);
@@ -103,13 +110,6 @@ describe("the dashboard display", () => {
     const line = container.querySelector<HTMLElement>("[data-dashboard-reading-line]");
     expect(line).not.toBeNull();
     expect(line!.contains(links[0]!)).toBe(true);
-  });
-
-  it("draws no live dashboard outside a review", () => {
-    const snapshot = props();
-    expect("review" in snapshot).toBe(false);
-    render(<Detail {...snapshot} />);
-    expect(liveLinks()).toHaveLength(0);
   });
 
   it("draws the no-series reading where the surface hands no data road", () => {
@@ -160,7 +160,7 @@ describe("the dashboard display", () => {
     const cases = [
       props(noContent("absent")),
       props(textContent("not a dashboard")),
-      props(undefined, { propsApiVersion: 2 }),
+      props(undefined, { propsApiVersion: 4 }),
       // A configuration the composition cannot lay out floors, with a data
       // road and without one, rather than reaching the composition.
       props(configurationContent({ portlets: "invalid" })),
@@ -315,7 +315,7 @@ describe("the dashboard display", () => {
   it("carries no header strip and no decision control", () => {
     const snapshots = [
       props(),
-      props(undefined, { review: { reading: "continued", openLive: OPEN_LIVE } }),
+      props(undefined, { artifact: artifactWithSource(), review: { reading: "continued", openLive: OPEN_LIVE } }),
       propsWithoutRoad(),
       props(noContent("absent")),
     ];

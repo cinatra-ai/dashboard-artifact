@@ -58,7 +58,7 @@ export const dashboardArtifactManifest: SemanticArtifactManifest = {
     renderers: {
       detail: {
         entry: "./src/renderers/detail.tsx",
-        propsApiVersion: 3,
+        propsApiVersion: 5,
         representations: [DASHBOARD_ARTIFACT_MEDIA_TYPE],
       },
     },

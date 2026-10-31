@@ -7,15 +7,14 @@
 // navigational hrefs (never closures / host context), and the content the server
 // already read from the pinned revision.
 //
-// THE VERSION IS 3 SINCE THIS DISPLAY DRAWS A REVIEW READING AND A DATA ROAD
-// (cinatra#3092). Version 2 gave the snapshot its content channel, which is
-// where a dashboard's pinned configuration arrives. Version 3 adds the two
-// fields this display draws from beside it: the REVIEW READING (whether the
-// review it is drawn in is pending or continued, and the live-dashboard address
-// the continued reading carries) and the DATA ROAD (the address the shared
-// read-only composition fetches its series from). A display that declared 2 is
-// handed a snapshot without them, so this display declares 3 and floors, named,
-// on anything older.
+// THE VERSION IS 5 BECAUSE THE READING DECIDES THE LIVE LINK (cinatra#3092,
+// specs/app-artifact-review.html §XI.5). Version 2 gave the snapshot its content
+// channel, which is where a dashboard's pinned configuration arrives. Version 3
+// adds the two fields this display draws from beside it: the REVIEW READING and
+// the DATA ROAD. The host's review road hands the reading only from version 5,
+// and a snapshot with no reading means no review stands, which draws the live
+// dashboard. A display that declared less would offer that link over an open
+// review, so this display declares 5 and floors, named, on anything older.
 //
 // This is a HOST-NEUTRAL STRUCTURAL MIRROR of the host's props contract,
 // declared locally so the renderer stays standalone-typecheckable and -testable
@@ -25,7 +24,7 @@
 
 import type { ArtifactContentProjection } from "./artifact-content-channel";
 
-export const ARTIFACT_RENDERER_PROPS_API_VERSION = 3;
+export const ARTIFACT_RENDERER_PROPS_API_VERSION = 5;
 
 // THE CANONICAL PROJECTIONS THE HOST ACTUALLY SENDS, spelled out rather than
 // widened to `string`, because a mirror that accepts anything proves nothing:
@@ -114,9 +113,9 @@ export interface ArtifactRendererProps {
   };
   /**
    * THE REVIEW READING (version 3): which reading of a review the surface draws
-   * this display in. `openLive` is the address of the live navigation; the host
-   * writes it as null in the pending reading whatever the surface passed, and
-   * this display draws it only in the continued reading all the same.
+   * this display in. The reading decides whether the live navigation is drawn;
+   * its address is `artifact.sourceUrl`, as the drawing binds it, so this display
+   * does not read `openLive`.
    *
    * ABSENT outside a review, and ABSENT BELOW version 3.
    */

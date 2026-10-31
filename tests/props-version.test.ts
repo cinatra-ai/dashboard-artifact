@@ -5,9 +5,9 @@
 // authoritative manifest, and the typed manifest this package exports.
 //
 // The host resolves a display, reads the version it declares, and builds the
-// snapshot AT THAT VERSION. Version 3 is the one whose snapshot carries the
-// review reading and the data road this display draws from; a manifest that
-// declared another version would be handed a snapshot without them.
+// snapshot AT THAT VERSION. Version 5 is the first one both of the host's review
+// roads hand the review reading to; a display declaring less is handed no
+// reading inside a review, and would read an open review as no review at all.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -30,8 +30,8 @@ const pkg = JSON.parse(
 const SLOTS = ["detail"] as const;
 
 describe("the props version this display is built against", () => {
-  it("is 3 — the version whose snapshot carries the review reading and the data road", () => {
-    expect(ARTIFACT_RENDERER_PROPS_API_VERSION).toBe(3);
+  it("is 5 — the version whose snapshot carries the review reading on the host's review roads", () => {
+    expect(ARTIFACT_RENDERER_PROPS_API_VERSION).toBe(5);
   });
 
   it("is declared by the detail entry in the authoritative manifest", () => {

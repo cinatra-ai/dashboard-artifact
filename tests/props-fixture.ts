@@ -19,7 +19,8 @@ export const REVISION_ID = "rev_1";
 /** The data road a first-party surface hands the display. */
 export const DATA_ROAD = { road: "session", apiUrl: "/api/cube" } as const;
 
-/** The live dashboard the continued reading navigates to. */
+/** The live dashboard: the artifact record's `sourceUrl`, which every reading
+ * that draws Open live dashboard navigates to. */
 export const OPEN_LIVE = "/dashboards/d1";
 
 export const PORTLET_TITLES = ["Qualified pipeline", "Win rate", "Cycle time"] as const;
@@ -87,13 +88,13 @@ export function textContent(text: string): ArtifactContentProjection {
   };
 }
 
-/** The first-party snapshot at version 3, with the data road and no review. */
+/** The first-party snapshot at version 5, with the data road and no review. */
 export function props(
   content: ArtifactContentProjection = configurationContent(),
   overrides: Partial<ArtifactRendererProps> = {},
 ): ArtifactRendererProps {
   const base: ArtifactRendererProps = {
-    propsApiVersion: 3,
+    propsApiVersion: 5,
     artifact: {
       id: "art_1",
       title: "Pipeline",
@@ -122,4 +123,9 @@ export function propsWithoutRoad(
 ): ArtifactRendererProps {
   const { data: _data, ...rest } = props(configurationContent(), overrides);
   return rest as ArtifactRendererProps;
+}
+
+/** The default snapshot's row, carrying the live dashboard's address. */
+export function artifactWithSource(sourceUrl: string | null = OPEN_LIVE): ArtifactRendererProps["artifact"] {
+  return { ...props().artifact, sourceUrl };
 }

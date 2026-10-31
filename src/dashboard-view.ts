@@ -4,7 +4,7 @@
 //
 //   `dashboard` — the pinned configuration the revision recorded, the portlet
 //     titles in its order, the data road the surface handed (or none), and the
-//     live-dashboard address ONLY in the continued reading of a review.
+//     live-dashboard address, unless a review is still open.
 //   `floor` — a NAMED reason it cannot be drawn. Never blank, never a throw: a
 //     display that threw would take the surface around it down with it.
 //
@@ -67,7 +67,8 @@ export type DashboardView =
       tiles: DashboardTile[];
       /** The surface's data road, or null where it handed none. */
       dataRoad: DashboardDataRoad | null;
-      /** The live-dashboard address, ONLY in the continued reading. */
+      /** The live-dashboard address: null while a review is open, and where the
+       *  record has none. */
       openLive: string | null;
     }
   | { kind: "floor"; reason: DashboardFloorReason };
@@ -197,14 +198,16 @@ function dataRoadOf(data: unknown): DashboardDataRoad | null {
   return { road: "session", apiUrl: data.apiUrl };
 }
 
-// cinatra#3092, acceptance 6: the live-dashboard navigation is absent in the
-// pending reading and present in the continued one. A pending reading draws no
-// link even if a host sent an address.
-function openLiveOf(review: unknown): string | null {
-  if (!isRecord(review)) return null;
-  if (review.reading !== "continued") return null;
-  if (typeof review.openLive !== "string" || review.openLive.length === 0) return null;
-  return review.openLive;
+// specs/app-artifact-review.html §XI.5: the review state alone decides Open live
+// dashboard. It is drawn once a review is continued and where no review stands,
+// and never while a decision is open. "Open live uses artifact.sourceUrl." A
+// `review` that is present and not a reading this display knows is treated as an
+// open review: no link.
+function openLiveOf(review: unknown, artifact: unknown): string | null {
+  const reviewAllows = review === undefined || (isRecord(review) && review.reading === "continued");
+  if (!reviewAllows || !isRecord(artifact)) return null;
+  const { sourceUrl } = artifact;
+  return typeof sourceUrl === "string" && sourceUrl.length > 0 ? sourceUrl : null;
 }
 
 /** Resolve the snapshot to the one view this display draws. */
@@ -243,6 +246,6 @@ export function resolveDashboardView(input: DashboardViewInput): DashboardView {
     portletTitles: composable.map((portlet) => portlet.title),
     tiles: tilesOf(composable, columns),
     dataRoad: dataRoadOf(input.data),
-    openLive: openLiveOf(input.review),
+    openLive: openLiveOf(input.review, input.artifact),
   };
 }

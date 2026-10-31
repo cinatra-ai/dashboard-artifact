@@ -89,7 +89,7 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
       renderers: {
         detail: {
           entry: "./src/renderers/detail.tsx",
-          propsApiVersion: 3,
+          propsApiVersion: 5,
           representations: ["application/vnd.cinatra.dashboard+json"],
         },
       },
