@@ -6,14 +6,17 @@
 // home, as a view. No toolbar, no filters, no drag, no save, and no decision
 // affordance: the composition mounts none, and this display adds none.
 //
-// THREE READINGS, one resolver (`../dashboard-view`):
+// SIX READINGS (specs/app-artifact-review.html §XI.5), one resolver
+// (`../dashboard-view`). The data road decides between two drawings, and the review
+// state decides the live dashboard link in each of them, so 2 x 3 readings:
 //   - with a data road, the composition over the pinned configuration and that
 //     road, and beneath it the reading line (frozen configuration, current
 //     numbers, and the live dashboard unless a review is still open);
 //   - without a data road, the no-series reading: the pinned layout's titles,
-//     each over an em dash in the number's place, the status sentence, and the
-//     same live dashboard rule. It mounts no composition and fetches nothing;
-//   - a snapshot it cannot draw becomes a NAMED floor, never a blank.
+//     each over an em dash in the number's place and an empty bar, the status
+//     sentence, and the same live dashboard rule. It mounts no composition and
+//     fetches nothing.
+// A snapshot it cannot draw becomes a NAMED floor, never a blank.
 //
 // NO HEADER STRIP: the display draws the work and nothing about itself — no
 // heading, no button, no download and no package name.
@@ -80,8 +83,11 @@ export default function DashboardArtifactDetail(props: ArtifactRendererProps): R
               style={{ gridColumn: tile.column, gridRow: tile.row }}
               data-dashboard-tile=""
             >
-              <p className="text-sm text-muted-foreground">{tile.title}</p>
-              <p className="mt-2 text-2xl font-semibold">—</p>
+              <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                {tile.title}
+              </p>
+              <p className="text-[19px] font-bold text-muted-foreground">—</p>
+              <div aria-hidden="true" className="mt-2 h-1 rounded-sm bg-muted" />
             </div>
           ))}
         </div>

@@ -111,6 +111,7 @@ describe("the six readings of the dashboard display", () => {
     "http://example.test/dashboards/d1",
     "https://example.test/dashboards/d1",
     "HTTPS://example.test/dashboards/d1",
+    "/dashboards/d1?tab=a%20b#top",
   ])("draws the link for the address %s", (sourceUrl) => {
     const { container } = render(<Detail {...props(undefined, { artifact: artifactWithSource(sourceUrl) })} />);
     expect(container.querySelector(OPEN_LIVE_BINDING)?.getAttribute("href")).toBe(sourceUrl);
@@ -129,6 +130,20 @@ describe("the six readings of the dashboard display", () => {
     ["a scheme with no slashes", "https:example.test/d1"],
     ["an address that does not parse", "https://"],
     ["a bare word", "dashboards/d1"],
+    ["a space inside a path", "/dashboards/a b"],
+    ["a delete character", "/dashboards/d1\u007f"],
+    ["a C1 control character", "/dashboards/d1\u0080"],
+    ["a no-break space", "/dashboards/a\u00a0b"],
+    ["an em space", "/dashboards/a\u2003b"],
+    ["a letter outside ASCII", "/dashboards/caf\u00e9"],
+    ["an angle bracket", "/dashboards/<d1>"],
+    ["a double quote", '/dashboards/"d1"'],
+    ["a backslash in an absolute address", "https:\\\\example.test/d1"],
+    ["three slashes after the scheme", "https:///example.test/d1"],
+    ["a user and a password", "https://alice:secret@example.test/d1"],
+    ["a user alone", "https://alice@example.test/d1"],
+    ["a password alone", "https://:secret@example.test/d1"],
+    ["an empty address", ""],
   ])("draws no link for %s", (_name, sourceUrl) => {
     const { container } = render(<Detail {...props(undefined, { artifact: artifactWithSource(sourceUrl) })} />);
     expect(container.querySelectorAll(OPEN_LIVE_BINDING)).toHaveLength(0);
@@ -139,6 +154,8 @@ describe("the six readings of the dashboard display", () => {
     ["an object", { href: OPEN_LIVE }],
     ["a boolean", true],
     ["a list holding an address", [OPEN_LIVE]],
+    ["undefined", undefined],
+    ["null", null],
   ])("draws no link for a sourceUrl that is %s", (_name, sourceUrl) => {
     const row = { ...artifactWithSource(), sourceUrl } as unknown as ArtifactRendererProps["artifact"];
     const { container } = render(<Detail {...props(undefined, { artifact: row })} />);
@@ -148,6 +165,7 @@ describe("the six readings of the dashboard display", () => {
   it.each([
     ["NaN", Number.NaN],
     ["Infinity", Number.POSITIVE_INFINITY],
+    ["-Infinity", Number.NEGATIVE_INFINITY],
     ["a string", "5"],
     ["absent", undefined],
   ])("floors a props version that is %s", (_name, propsApiVersion) => {
@@ -161,10 +179,21 @@ describe("the six readings of the dashboard display", () => {
     ["a reading it does not know", { reading: "settled", openLive: OPEN_LIVE }],
     ["a review that is not an object", "continued"],
     ["a null review", null],
+    ["an empty review", {}],
   ])("treats %s as an open review: no link", (_name, review) => {
     const snapshot = { ...props(undefined, { artifact }), review } as unknown as ArtifactRendererProps;
     const { container } = render(<Detail {...snapshot} />);
     expect(container.querySelectorAll(OPEN_LIVE_BINDING)).toHaveLength(0);
+  });
+
+  it("draws an empty bar under each em dash of the no-series reading", () => {
+    const { container } = render(<Detail {...propsWithoutRoad({ artifact })} />);
+    const tiles = Array.from(container.querySelectorAll("[data-dashboard-tile]"));
+    expect(tiles.length).toBeGreaterThan(0);
+    for (const tile of tiles) {
+      expect(tile.lastElementChild?.getAttribute("aria-hidden")).toBe("true");
+      expect(tile.lastElementChild?.textContent).toBe("");
+    }
   });
 
   it("names the display on its floor, so the error state is the same surface", () => {

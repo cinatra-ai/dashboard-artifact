@@ -209,20 +209,20 @@ function openLiveOf(review: unknown, artifact: unknown): string | null {
   return liveAddressOf(artifact.sourceUrl);
 }
 
-// The address reaches an href, so it passes an allow-list: a root-relative path
-// or an absolute http(s) address, and nothing else. A browser drops tabs and new
-// lines from an address and reads a backslash as a slash, so "/\t/host" and
-// "/\\host" would leave the application: any space, control character or backslash
-// refuses the address.
-const NOT_IN_AN_ADDRESS = /[\u0000-\u0020\\]/;
+// The address reaches an href, so it passes one closed rule. Its characters are
+// the characters of RFC 3986, so a space, a control character, a backslash and any
+// character outside ASCII refuse it: a browser drops or rewrites some of these, and
+// "/\t/host" or "/\\host" would leave the application. Its form is a root-relative
+// path, or an absolute http(s) address that parses and names no credentials.
+const ADDRESS_CHARACTERS = /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/;
 
 function liveAddressOf(sourceUrl: unknown): string | null {
-  if (typeof sourceUrl !== "string" || NOT_IN_AN_ADDRESS.test(sourceUrl)) return null;
+  if (typeof sourceUrl !== "string" || !ADDRESS_CHARACTERS.test(sourceUrl)) return null;
   if (/^\/(?!\/)/.test(sourceUrl)) return sourceUrl;
-  if (!/^https?:\/\//i.test(sourceUrl)) return null;
+  if (!/^https?:\/\/(?!\/)/i.test(sourceUrl)) return null;
   try {
-    new URL(sourceUrl);
-    return sourceUrl;
+    const url = new URL(sourceUrl);
+    return url.username === "" && url.password === "" ? sourceUrl : null;
   } catch {
     return null;
   }
@@ -232,7 +232,7 @@ function liveAddressOf(sourceUrl: unknown): string | null {
 export function resolveDashboardView(input: DashboardViewInput): DashboardView {
   if (!isRecord(input)) return { kind: "floor", reason: "props-version" };
   const version = input.propsApiVersion;
-  if (typeof version !== "number" || !Number.isFinite(version) || version < ARTIFACT_RENDERER_PROPS_API_VERSION) {
+  if (!Number.isFinite(version) || (version as number) < ARTIFACT_RENDERER_PROPS_API_VERSION) {
     return { kind: "floor", reason: "props-version" };
   }
   const content = input.content as ArtifactContentProjection | undefined;
