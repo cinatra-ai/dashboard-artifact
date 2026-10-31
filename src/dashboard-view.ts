@@ -206,15 +206,33 @@ function dataRoadOf(data: unknown): DashboardDataRoad | null {
 function openLiveOf(review: unknown, artifact: unknown): string | null {
   const reviewAllows = review === undefined || (isRecord(review) && review.reading === "continued");
   if (!reviewAllows || !isRecord(artifact)) return null;
-  const { sourceUrl } = artifact;
-  return typeof sourceUrl === "string" && sourceUrl.length > 0 ? sourceUrl : null;
+  return liveAddressOf(artifact.sourceUrl);
+}
+
+// The address reaches an href, so it passes an allow-list: a root-relative path
+// or an absolute http(s) address, and nothing else. A browser drops tabs and new
+// lines from an address and reads a backslash as a slash, so "/\t/host" and
+// "/\\host" would leave the application: any space, control character or backslash
+// refuses the address.
+const NOT_IN_AN_ADDRESS = /[\u0000-\u0020\\]/;
+
+function liveAddressOf(sourceUrl: unknown): string | null {
+  if (typeof sourceUrl !== "string" || NOT_IN_AN_ADDRESS.test(sourceUrl)) return null;
+  if (/^\/(?!\/)/.test(sourceUrl)) return sourceUrl;
+  if (!/^https?:\/\//i.test(sourceUrl)) return null;
+  try {
+    new URL(sourceUrl);
+    return sourceUrl;
+  } catch {
+    return null;
+  }
 }
 
 /** Resolve the snapshot to the one view this display draws. */
 export function resolveDashboardView(input: DashboardViewInput): DashboardView {
   if (!isRecord(input)) return { kind: "floor", reason: "props-version" };
   const version = input.propsApiVersion;
-  if (typeof version !== "number" || version < ARTIFACT_RENDERER_PROPS_API_VERSION) {
+  if (typeof version !== "number" || !Number.isFinite(version) || version < ARTIFACT_RENDERER_PROPS_API_VERSION) {
     return { kind: "floor", reason: "props-version" };
   }
   const content = input.content as ArtifactContentProjection | undefined;

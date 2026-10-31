@@ -104,6 +104,59 @@ describe("the six readings of the dashboard display", () => {
     expect(missing.container.querySelectorAll(OPEN_LIVE_BINDING)).toHaveLength(0);
   });
 
+  // The address reaches an href, so only the two forms a live dashboard can have
+  // pass: an absolute http(s) address and a root-relative path.
+  it.each([
+    "/dashboards/d1",
+    "http://example.test/dashboards/d1",
+    "https://example.test/dashboards/d1",
+    "HTTPS://example.test/dashboards/d1",
+  ])("draws the link for the address %s", (sourceUrl) => {
+    const { container } = render(<Detail {...props(undefined, { artifact: artifactWithSource(sourceUrl) })} />);
+    expect(container.querySelector(OPEN_LIVE_BINDING)?.getAttribute("href")).toBe(sourceUrl);
+  });
+
+  it.each([
+    ["javascript:", "javascript:alert(1)"],
+    ["mixed-case javascript:", "JaVaScRiPt:alert(1)"],
+    ["data:", "data:text/html,<p>x</p>"],
+    ["another scheme", "ftp://example.test/d1"],
+    ["protocol-relative", "//example.test/d1"],
+    ["a backslash after the slash", "/\\example.test/d1"],
+    ["a tab inside the slashes", "/\t/example.test/d1"],
+    ["a leading space", " https://example.test/d1"],
+    ["a leading space before javascript:", " javascript:alert(1)"],
+    ["a scheme with no slashes", "https:example.test/d1"],
+    ["an address that does not parse", "https://"],
+    ["a bare word", "dashboards/d1"],
+  ])("draws no link for %s", (_name, sourceUrl) => {
+    const { container } = render(<Detail {...props(undefined, { artifact: artifactWithSource(sourceUrl) })} />);
+    expect(container.querySelectorAll(OPEN_LIVE_BINDING)).toHaveLength(0);
+  });
+
+  it.each([
+    ["a number", 42],
+    ["an object", { href: OPEN_LIVE }],
+    ["a boolean", true],
+    ["a list holding an address", [OPEN_LIVE]],
+  ])("draws no link for a sourceUrl that is %s", (_name, sourceUrl) => {
+    const row = { ...artifactWithSource(), sourceUrl } as unknown as ArtifactRendererProps["artifact"];
+    const { container } = render(<Detail {...props(undefined, { artifact: row })} />);
+    expect(container.querySelectorAll(OPEN_LIVE_BINDING)).toHaveLength(0);
+  });
+
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["a string", "5"],
+    ["absent", undefined],
+  ])("floors a props version that is %s", (_name, propsApiVersion) => {
+    const snapshot = { ...props(), propsApiVersion } as unknown as ArtifactRendererProps;
+    const { container } = render(<Detail {...snapshot} />);
+    const floor = container.querySelector('[data-conformance-id="dashboard-display"]');
+    expect(floor?.getAttribute("data-dashboard-floor")).toBe("props-version");
+  });
+
   it.each([
     ["a reading it does not know", { reading: "settled", openLive: OPEN_LIVE }],
     ["a review that is not an object", "continued"],
