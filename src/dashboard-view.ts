@@ -11,13 +11,14 @@
 // TOTAL and PURE: every input returns a view, and nothing here reaches the
 // network.
 
-import type { ArtifactContentProjection } from "./artifact-content-channel";
+import { ARTIFACT_CONTENT_CHANNEL_VERSION, type ArtifactContentProjection } from "./artifact-content-channel";
 import { ARTIFACT_RENDERER_PROPS_API_VERSION, type ArtifactRendererProps } from "./artifact-renderer-props";
 
 /** Why this display is drawing a floor instead of the dashboard. */
 export type DashboardFloorReason =
   | "props-version"
   | "content-not-configuration"
+  | "content-channel-version"
   | "configuration-not-object"
   | "configuration-without-portlets"
   | "configuration-portlet-unreadable"
@@ -77,6 +78,8 @@ const FLOOR_MESSAGES: Record<DashboardFloorReason, string> = {
     "This dashboard cannot be drawn: it was handed a snapshot of a version this display does not read.",
   "content-not-configuration":
     "This dashboard cannot be drawn here: this view was not given a pinned configuration to show.",
+  "content-channel-version":
+    "This dashboard cannot be drawn: it was handed content of a version this display does not read.",
   "configuration-not-object":
     "This dashboard cannot be drawn: the configuration handed to this view is incomplete.",
   "configuration-without-portlets":
@@ -231,6 +234,11 @@ export function resolveDashboardView(input: DashboardViewInput): DashboardView {
   const content = input.content as ArtifactContentProjection | undefined;
   if (!isRecord(content) || content.kind !== "configuration") {
     return { kind: "floor", reason: "content-not-configuration" };
+  }
+  // A projection of another channel version is refused, never read at the
+  // wrong shape.
+  if (content.channelVersion !== ARTIFACT_CONTENT_CHANNEL_VERSION) {
+    return { kind: "floor", reason: "content-channel-version" };
   }
   if (!isRecord(content.configuration)) {
     return { kind: "floor", reason: "configuration-not-object" };

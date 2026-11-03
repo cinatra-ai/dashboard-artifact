@@ -12,6 +12,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import Detail from "../src/renderers/detail";
+import { resolveDashboardView } from "../src/dashboard-view";
 import {
   CONFIGURATION,
   DATA_ROAD,
@@ -333,5 +334,96 @@ describe("the dashboard display", () => {
       expect(container.innerHTML.includes("@cinatra-ai/dashboard-artifact")).toBe(false);
       cleanup();
     }
+  });
+});
+
+describe("the dashboard display's closed readings of its snapshot", () => {
+  function floorOf(container: HTMLElement): string | null {
+    expect(doubles(container)).toHaveLength(0);
+    return (
+      container.querySelector<HTMLElement>('[data-dashboard-artifact="floor"]')?.getAttribute("data-dashboard-floor") ??
+      null
+    );
+  }
+
+  it("floors a projection of another content channel version, and draws version 1", () => {
+    for (const channelVersion of [2, 0, "1", undefined, null, Number.NaN]) {
+      const other = { ...configurationContent(), channelVersion } as unknown as ReturnType<typeof configurationContent>;
+      for (const snapshot of [props(other), propsWithoutRoad({ content: other })]) {
+        const { container } = render(<Detail {...snapshot} />);
+        expect(floorOf(container)).toBe("content-channel-version");
+        cleanup();
+      }
+    }
+    const { container } = render(<Detail {...props(configurationContent())} />);
+    expect(doubles(container)).toHaveLength(1);
+  });
+
+  it("floors a snapshot that is not a record, and never throws", () => {
+    for (const input of [null, undefined, [], "snapshot", 5]) {
+      expect(resolveDashboardView(input as never)).toEqual({ kind: "floor", reason: "props-version" });
+    }
+  });
+
+  it("floors absent or null content as content that is not a configuration", () => {
+    for (const content of [null, undefined, "configuration", []]) {
+      const { container } = render(<Detail {...props(undefined, { content: content as never })} />);
+      expect(floorOf(container)).toBe("content-not-configuration");
+      cleanup();
+    }
+  });
+
+  it("floors an envelope whose portlets are not a list, or whose analytics config is not an object", () => {
+    const cases = [
+      { apiVersion: "v1.2", portlets: "x" },
+      { apiVersion: "v1.2", portlets: { analytics: true } },
+      storedEnvelope(CONFIGURATION, (analytics) => [null, { ...analytics, config: null }]),
+      storedEnvelope(CONFIGURATION, (analytics) => [{ ...analytics, config: undefined }]),
+      storedEnvelope(CONFIGURATION, (analytics) => [{ ...analytics, config: "dashboard" }]),
+    ];
+    for (const configuration of cases) {
+      let container: HTMLElement | undefined;
+      expect(() => {
+        container = render(<Detail {...props(configurationContent(configuration))} />).container;
+      }).not.toThrow();
+      expect(floorOf(container!)).toBe("configuration-without-portlets");
+      cleanup();
+    }
+    // A null entry beside the one analytics portlet is passed over, not read.
+    const { container } = render(
+      <Detail {...props(configurationContent(storedEnvelope(CONFIGURATION, (analytics) => [null, analytics])))} />,
+    );
+    expect(doubles(container)).toHaveLength(1);
+  });
+
+  it("lays out a grid that names no column count on twelve columns", () => {
+    const { container } = render(
+      <Detail {...propsWithoutRoadFor(storedEnvelope({ grid: { rowHeight: 80 }, portlets: CONFIGURATION.portlets }))} />,
+    );
+    const first = container.querySelector<HTMLElement>("[data-dashboard-tile]");
+    expect(first).not.toBeNull();
+    expect(first!.parentElement!.style.gridTemplateColumns).toBe("repeat(12, minmax(0, 1fr))");
+  });
+
+  it("orders the tiles of one row by column, and ties by their pinned order", () => {
+    const { container } = render(
+      <Detail
+        {...propsWithoutRoadFor({
+          portlets: [
+            { id: "c", title: "Right", x: 8, y: 0, w: 4, h: 3 },
+            { id: "a", title: "Left", x: 0, y: 0, w: 4, h: 3 },
+            { id: "b1", title: "Middle first", x: 4, y: 0, w: 4, h: 3 },
+            { id: "b2", title: "Middle second", x: 4, y: 0, w: 4, h: 3 },
+          ],
+        })}
+      />,
+    );
+    const tiles = Array.from(container.querySelectorAll<HTMLElement>("[data-dashboard-tile]"));
+    expect(tiles.map((tile) => tile.textContent)).toEqual(["Left—", "Middle first—", "Middle second—", "Right—"]);
+  });
+
+  it("reads a snapshot of a props version above its own", () => {
+    const { container } = render(<Detail {...props(undefined, { propsApiVersion: 6 })} />);
+    expect(doubles(container)).toHaveLength(1);
   });
 });
