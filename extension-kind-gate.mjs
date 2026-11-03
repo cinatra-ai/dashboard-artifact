@@ -40,7 +40,8 @@
 //       (mirrors extension-import-ban hostInternal, pinned empty).
 //     - SDK-only first-party deps: the only @cinatra-ai/* CODE deps permitted
 //       (source imports OR package.json deps/peer/optional) are
-//       @cinatra-ai/sdk-extensions + @cinatra-ai/sdk-ui (mirrors
+//       @cinatra-ai/sdk-extensions + @cinatra-ai/sdk-ui, and the host-served
+//       class HOST_SERVED_PACKAGES (mirrors
 //       extension-import-ban sdkOnly, pinned empty). This subsumes the
 //       cross-extension ban for the @cinatra-ai scope. (Standalone scope note
 //       below.)
@@ -156,6 +157,29 @@ export const HOST_PORT_NAMES = new Set([
 
 // inventory.SDK_PACKAGES — the only permitted first-party @cinatra-ai CODE deps.
 export const SDK_PACKAGES = new Set(["@cinatra-ai/sdk-extensions", "@cinatra-ai/sdk-ui"]);
+
+// inventory.HOST_SERVED_READ_ONLY_COMPOSITIONS + inventory.HOST_SERVED_PACKAGES —
+// the HOST-SERVED first-party class, DISTINCT from the SDK class. The host
+// serves these modules to an extension (a client bundle leaves them EXTERNAL,
+// like React, and the host resolves them to its ONE instance, or resolves them
+// for the parts it compiles from source), so an extension importing one takes
+// on NO extraction-blocking coupling. A subpath of a host-served base collapses
+// to the base package, exactly as in the SDK class — EXCEPT for an EXACT
+// host-served specifier, which is admitted as itself and never collapsed.
+//
+// THE READ-ONLY DASHBOARD COMPOSITION (cinatra#3092): the host serves the ONE
+// module that exports the two promoted read-only views at its EXACT specifier.
+// Its base package `@cinatra-ai/sdk-dashboard` and every other subpath stay
+// violations: the admission is the specifier, never the package.
+export const HOST_SERVED_READ_ONLY_COMPOSITIONS = Object.freeze([
+  Object.freeze({ specifier: "@cinatra-ai/sdk-dashboard/components", exportName: "ReadOnlyComposedDashboard" }),
+  Object.freeze({ specifier: "@cinatra-ai/sdk-dashboard/components", exportName: "ReadOnlySinglePortlet" }),
+]);
+
+export const HOST_SERVED_PACKAGES = new Set([
+  "@cinatra-ai/design-primitives",
+  ...HOST_SERVED_READ_ONLY_COMPOSITIONS.map((c) => c.specifier),
+]);
 
 // host-peer-value-import-ban.HOST_PEERS — value imports of these over the
 // serverEntry graph are forbidden (the prod file:// loader cannot resolve them).
@@ -305,12 +329,17 @@ export function scanHostInternalImports(text) {
   return [...hits];
 }
 
-/** Is `spec` a NON-SDK first-party (@cinatra-ai) base-package coupling? */
+/** Is `spec` a NON-SDK first-party (@cinatra-ai) base-package coupling? SDK
+ * packages and HOST-SERVED packages (and their subpaths) are allowed, and so is
+ * an EXACT host-served specifier (checked before the base-package collapse, so
+ * its base package is not admitted with it). */
 export function isSdkOnlyViolation(spec) {
+  if (HOST_SERVED_PACKAGES.has(spec)) return false; // an exact host-served specifier
   const base = basePackageOf(spec);
   if (!base || !base.startsWith("@")) return false;
   const scope = base.split("/")[0];
   if (scope !== FIRST_PARTY_SCOPE) return false;
+  if (HOST_SERVED_PACKAGES.has(base)) return false; // served by the host at run time
   return !SDK_PACKAGES.has(base);
 }
 
@@ -731,7 +760,8 @@ export function validateCommon(packageRoot) {
     }
     for (const h of scanHostInternalImports(text)) hostInternal.add(h);
     for (const imp of parseModuleImports(text)) {
-      const base = basePackageOf(imp.specifier);
+      // An EXACT host-served specifier is its own reporting unit, never its base.
+      const base = HOST_SERVED_PACKAGES.has(imp.specifier) ? imp.specifier : basePackageOf(imp.specifier);
       if (base && base !== selfName && isSdkOnlyViolation(base)) sdkOnly.add(base);
     }
   }
@@ -748,7 +778,7 @@ export function validateCommon(packageRoot) {
     errors.push(`@/ host-internal import "${h}" — an extension reaches host capability ONLY through register(ctx) ports; remove the @/ import`);
   }
   for (const s of [...sdkOnly].sort()) {
-    errors.push(`non-SDK first-party dependency "${s}" — the only permitted @cinatra-ai code deps are @cinatra-ai/sdk-extensions and @cinatra-ai/sdk-ui; route everything else through register(ctx) host ports`);
+    errors.push(`non-SDK first-party dependency "${s}" — the only permitted @cinatra-ai code deps are @cinatra-ai/sdk-extensions, @cinatra-ai/sdk-ui and the host-served class; route everything else through register(ctx) host ports`);
   }
 
   // ---- 7. host-peer value-import ban over the serverEntry graph ----
