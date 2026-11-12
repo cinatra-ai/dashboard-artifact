@@ -1,6 +1,6 @@
 // A TEST-ONLY DOUBLE of the shared read-only composition the host serves at
 // `@cinatra-ai/sdk-dashboard/components` (cinatra#3092). vitest.config.ts
-// aliases that exact id onto this file while the id does not resolve.
+// aliases that exact id onto this file, also where the id resolves.
 //
 // It draws one element carrying the JSON of the props it received and nothing
 // else, so a suite can read exactly what the display handed the composition.
