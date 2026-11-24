@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 import {
   DASHBOARD_ARTIFACT_MEDIA_TYPE,
   DASHBOARD_ARTIFACT_OBJECT_TYPE,
+  DASHBOARD_PORTLET_MEDIA_TYPE,
+  DASHBOARD_PORTLET_OBJECT_TYPE,
   dashboardArtifactManifest,
 } from "../src/index";
 
@@ -77,12 +79,12 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
     }
   });
 
-  it("ships ONE display for the dashboard form and NO matcher skill", () => {
-    // The pack ships its own dashboard display (cinatra#3092): one `detail`
-    // renderer over the dashboard media type, at the props version whose
+  it("ships ONE display for the dashboard and portlet forms and NO matcher skill", () => {
+    // The pack ships its own display (cinatra#3092): one `detail` renderer over
+    // the dashboard and the portlet media types, at the props version whose
     // snapshot carries the review reading and the data road. Dashboards are
-    // minted by the twin writer, not classified from an upload — so no matcher
-    // skill bundle.
+    // minted by the twin writer and portlets by an explicit cut, not classified
+    // from an upload — so no matcher skill bundle.
     expect(pkg.cinatra.artifact.ui).toEqual({
       abiVersion: 1,
       sdkAbiRange: "^2.5.0",
@@ -90,7 +92,10 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
         detail: {
           entry: "./src/renderers/detail.tsx",
           propsApiVersion: 5,
-          representations: ["application/vnd.cinatra.dashboard+json"],
+          representations: [
+            "application/vnd.cinatra.dashboard+json",
+            "application/vnd.cinatra.dashboard-portlet+json",
+          ],
         },
       },
     });
@@ -101,10 +106,17 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
     expect(pkg.cinatra.artifact.accepts).toEqual({ dashboard: true });
   });
 
-  it("DECLARES exactly one generic dashboard object type", () => {
+  it("DECLARES exactly two object types: the dashboard, then the portlet", () => {
     const claims = pkg.cinatra.artifact.objectTypes;
     expect(Array.isArray(claims)).toBe(true);
-    expect(claims).toHaveLength(1);
+    expect(claims!.map((claim) => claim.type)).toEqual([
+      "@cinatra-ai/dashboard-artifact:dashboard",
+      "@cinatra-ai/dashboard-artifact:portlet",
+    ]);
+  });
+
+  it("DECLARES the generic dashboard object type", () => {
+    const claims = pkg.cinatra.artifact.objectTypes;
 
     const [claim] = claims!;
     // Namespaced, self-registered under this package's own namespace.
@@ -157,6 +169,47 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
     ]);
   });
 
+  // specs/app-artifact-review.html §XI.6: one entry of a dashboard, addressable
+  // on its own; its identity is the dashboard and the entry's instance id, and
+  // each revision names the dashboard revision it was cut from.
+  it("DECLARES the portlet object type with its identity and its cut", () => {
+    const claim = pkg.cinatra.artifact.objectTypes![1]!;
+    expect(claim.type).toBe("@cinatra-ai/dashboard-artifact:portlet");
+    expect(claim.type.startsWith(`${pkg.name}:`)).toBe(true);
+    expect(claim.claim).toBe("dedicated");
+    // Pinning stays as the dashboard type has it until it is decided.
+    expect(claim.dispositions).toEqual({
+      projection: "artifact-safe",
+      pinnable: false,
+      snapshotPolicy: "metadata",
+      sensitivity: "normal",
+    });
+    expect(claim.schema?.type).toBe("object");
+    const props = claim.schema?.properties ?? {};
+    for (const key of ["dashboardId", "portletInstanceId", "dashboardRevisionId"]) {
+      expect(props[key]).toEqual({ type: "string" });
+    }
+    expect((props.mime as { const?: string })?.const).toBe(
+      "application/vnd.cinatra.dashboard-portlet+json",
+    );
+    expect(claim.schema?.required).toEqual([
+      "artifactType",
+      "dashboardId",
+      "portletInstanceId",
+      "dashboardRevisionId",
+      "mime",
+      "size",
+      "originKind",
+      "latestRepresentationRevisionId",
+    ]);
+    expect(claim.schema?.additionalProperties).toBe(true);
+  });
+
+  it("exposes the portlet constants equal to the manifest", () => {
+    expect(DASHBOARD_PORTLET_OBJECT_TYPE).toBe("@cinatra-ai/dashboard-artifact:portlet");
+    expect(DASHBOARD_PORTLET_MEDIA_TYPE).toBe("application/vnd.cinatra.dashboard-portlet+json");
+  });
+
   // The host's dashboard writer stores this form on every dashboard resource:
   // DASHBOARD_RESOURCE_MIME in src/lib/dashboards/dashboard-artifact-twin-writer.ts.
   it("exposes the dashboard media type constant equal to the host writer's form", () => {
@@ -171,6 +224,9 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
     expect(dashboardArtifactManifest.objectTypes).toEqual(pkg.cinatra.artifact.objectTypes);
     expect(DASHBOARD_ARTIFACT_OBJECT_TYPE).toBe(
       pkg.cinatra.artifact.objectTypes![0]!.type,
+    );
+    expect(DASHBOARD_PORTLET_OBJECT_TYPE).toBe(
+      pkg.cinatra.artifact.objectTypes![1]!.type,
     );
   });
 });

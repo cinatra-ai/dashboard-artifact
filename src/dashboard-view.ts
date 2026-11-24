@@ -1,10 +1,14 @@
 // THE DECISION LEAF of the dashboard display (cinatra#3092): it maps the
-// authorized host snapshot to exactly one of two outcomes, and it is the only
-// place in this package that reads the content channel.
+// authorized host snapshot to exactly one view, and it is the only place in this
+// package that reads the content channel.
 //
 //   `dashboard` — the pinned configuration the revision recorded, its tiles in
 //     their pinned reading order, the data road the surface handed (or none), and
 //     the live-dashboard address, unless a review is still open.
+//   `portlet` — one entry of a dashboard, cut on its own
+//     (specs/app-artifact-review.html §XI.6): the dashboard configuration the cut
+//     pinned, the entry's instance id, the dashboard and the dashboard revision it
+//     was cut from, and the same data road and live-dashboard rule.
 //   `floor` — a NAMED reason it cannot be drawn. Never blank, never a throw: a
 //     display that threw would take the surface around it down with it.
 //
@@ -13,6 +17,7 @@
 
 import { ARTIFACT_CONTENT_CHANNEL_VERSION, type ArtifactContentProjection } from "./artifact-content-channel";
 import { ARTIFACT_RENDERER_PROPS_API_VERSION, type ArtifactRendererProps } from "./artifact-renderer-props";
+import { DASHBOARD_PORTLET_OBJECT_TYPE } from "./object-types";
 
 /** Why this display is drawing a floor instead of the dashboard. */
 export type DashboardFloorReason =
@@ -22,7 +27,9 @@ export type DashboardFloorReason =
   | "configuration-not-object"
   | "configuration-without-portlets"
   | "configuration-portlet-unreadable"
-  | "configuration-grid-unreadable";
+  | "configuration-grid-unreadable"
+  | "portlet-cut-unreadable"
+  | "portlet-entry-missing";
 
 // THE COMPOSITION'S CONFIGURATION (cinatra#3092). The shared read-only
 // composition hands its `config` to drizzle-cube's DashboardProvider, whose
@@ -69,11 +76,40 @@ export type DashboardView =
     }
   | { kind: "floor"; reason: DashboardFloorReason };
 
+/** Where a portlet was cut from: the dashboard, by id and by the title it had
+ * at the cut, the dashboard revision, and the entry's stable instance id. */
+export type PortletCut = {
+  dashboardId: string;
+  dashboardTitle: string;
+  dashboardRevisionId: string;
+  portletInstanceId: string;
+};
+
+/** What the portlet display can be showing. */
+export type PortletView =
+  | {
+      kind: "portlet";
+      /** The portlet revision the cut was pinned at. */
+      revisionId: string;
+      /** The dashboard and the dashboard revision the entry was cut from. */
+      cut: PortletCut;
+      /** The analytics body of the configuration the cut pinned. The composition
+       *  narrows it to the one entry `cut.portletInstanceId` names. */
+      configuration: DashboardConfiguration;
+      /** The one entry's title: the tile the no-series reading draws. */
+      title: string;
+      /** The surface's data road, or null where it handed none. */
+      dataRoad: DashboardDataRoad | null;
+      /** The live-dashboard address, on the dashboard's rule. */
+      openLive: string | null;
+    }
+  | { kind: "floor"; reason: DashboardFloorReason };
+
 /** A display must never throw on a shape it did not expect, so the input is
  * accepted loosely and every surprise lands on the floor. */
 export type DashboardViewInput = Partial<ArtifactRendererProps> | null | undefined;
 
-const FLOOR_MESSAGES: Record<DashboardFloorReason, string> = {
+const FLOOR_MESSAGES: Record<Exclude<DashboardFloorReason, `portlet-${string}`>, string> = {
   "props-version":
     "This dashboard cannot be drawn: it was handed a snapshot of a version this display does not read.",
   "content-not-configuration":
@@ -90,9 +126,24 @@ const FLOOR_MESSAGES: Record<DashboardFloorReason, string> = {
     "This dashboard cannot be drawn: the configuration handed to this view has a grid it cannot lay out.",
 };
 
-/** The sentence a floor draws for its reason. */
-export function dashboardFloorMessage(reason: DashboardFloorReason): string {
-  return FLOOR_MESSAGES[reason];
+const PORTLET_FLOOR_MESSAGES: Record<Extract<DashboardFloorReason, `portlet-${string}`>, string> = {
+  "portlet-cut-unreadable":
+    "This portlet cannot be drawn: the cut handed to this view does not say which dashboard, revision and entry it was cut from.",
+  "portlet-entry-missing":
+    "This portlet cannot be drawn: the configuration handed to this view does not hold the entry it was cut as.",
+};
+
+/** What a floor names as the thing it cannot draw. */
+export type FloorSubject = "dashboard" | "portlet";
+
+/** The sentence a floor draws for its reason. A reason shared by both displays
+ * names the subject the display draws. */
+export function dashboardFloorMessage(reason: DashboardFloorReason, subject: FloorSubject = "dashboard"): string {
+  if (reason === "portlet-cut-unreadable" || reason === "portlet-entry-missing") {
+    return PORTLET_FLOOR_MESSAGES[reason];
+  }
+  const message = FLOOR_MESSAGES[reason];
+  return subject === "portlet" ? message.replace(/^This dashboard /, "This portlet ") : message;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -224,8 +275,14 @@ function liveAddressOf(sourceUrl: unknown): string | null {
   }
 }
 
-/** Resolve the snapshot to the one view this display draws. */
-export function resolveDashboardView(input: DashboardViewInput): DashboardView {
+type Floor = { kind: "floor"; reason: DashboardFloorReason };
+
+/** The pinned configuration the snapshot carries, read through the checks both
+ * displays share: the props version, the content kind and channel version, and a
+ * configuration that is an object. */
+function pinnedConfigurationOf(
+  input: DashboardViewInput,
+): Floor | { kind: "pinned"; revisionId: string; configuration: Record<string, unknown> } {
   if (!isRecord(input)) return { kind: "floor", reason: "props-version" };
   const version = input.propsApiVersion;
   if (!Number.isFinite(version) || (version as number) < ARTIFACT_RENDERER_PROPS_API_VERSION) {
@@ -243,7 +300,15 @@ export function resolveDashboardView(input: DashboardViewInput): DashboardView {
   if (!isRecord(content.configuration)) {
     return { kind: "floor", reason: "configuration-not-object" };
   }
-  const body = analyticsBodyOf(content.configuration);
+  return { kind: "pinned", revisionId: content.representationRevisionId, configuration: content.configuration };
+}
+
+/** The drawable body of a dashboard configuration, through the one set of
+ * layout rules both displays share. */
+function composableBodyOf(
+  configuration: Record<string, unknown>,
+): Floor | { kind: "body"; configuration: DashboardConfiguration; portlets: DashboardPortlet[]; columns: number } {
+  const body = analyticsBodyOf(configuration);
   const portlets = body === null ? null : body.portlets;
   if (body === null || !Array.isArray(portlets) || portlets.length === 0) {
     return { kind: "floor", reason: "configuration-without-portlets" };
@@ -257,13 +322,74 @@ export function resolveDashboardView(input: DashboardViewInput): DashboardView {
   if (columns === null) {
     return { kind: "floor", reason: "configuration-grid-unreadable" };
   }
+  return { kind: "body", configuration: { ...body, portlets }, portlets, columns };
+}
+
+/** Resolve the snapshot to the one view this display draws. */
+export function resolveDashboardView(input: DashboardViewInput): DashboardView {
+  const pinned = pinnedConfigurationOf(input);
+  if (pinned.kind === "floor") return pinned;
+  const body = composableBodyOf(pinned.configuration);
+  if (body.kind === "floor") return body;
+  const snapshot = input as Record<string, unknown>;
   return {
     kind: "dashboard",
-    revisionId: content.representationRevisionId,
-    configuration: { ...body, portlets },
-    columns,
-    tiles: tilesOf(portlets, columns),
-    dataRoad: dataRoadOf(input.data),
-    openLive: openLiveOf(input.review, input.artifact),
+    revisionId: pinned.revisionId,
+    configuration: body.configuration,
+    columns: body.columns,
+    tiles: tilesOf(body.portlets, body.columns),
+    dataRoad: dataRoadOf(snapshot.data),
+    openLive: openLiveOf(snapshot.review, snapshot.artifact),
+  };
+}
+
+/** True where the snapshot's row is a portlet: the one fact the display branches
+ * on. Anything else, a row of no known type included, is drawn as a dashboard. */
+export function isPortletSnapshot(input: DashboardViewInput): boolean {
+  return isRecord(input) && isRecord(input.artifact) && input.artifact.objectType === DASHBOARD_PORTLET_OBJECT_TYPE;
+}
+
+// THE PORTLET CUT (cinatra#3092, specs/app-artifact-review.html §XI.6, plan call
+// 6). A portlet revision pins one cut: the dashboard it was cut from (its id and
+// the title it had at the cut), the dashboard revision, the entry's stable
+// instance id, and `configuration`, the dashboard configuration the entry's
+// bindings need, as stored (an apiVersion 1.2 envelope or a body). The instance
+// id names the entry in that configuration's analytics body, which is what the
+// composition narrows by. A cut missing any of its four facts floors: "A display
+// draws no typed sentence when a fact it needs is missing."
+const CUT_FACTS = ["dashboardId", "dashboardTitle", "dashboardRevisionId", "portletInstanceId"] as const;
+
+function cutOf(record: Record<string, unknown>): PortletCut | null {
+  if (!CUT_FACTS.every((fact) => isNonEmptyString(record[fact]))) return null;
+  return {
+    dashboardId: record.dashboardId as string,
+    dashboardTitle: record.dashboardTitle as string,
+    dashboardRevisionId: record.dashboardRevisionId as string,
+    portletInstanceId: record.portletInstanceId as string,
+  };
+}
+
+/** Resolve a portlet snapshot to the one view the portlet display draws. */
+export function resolvePortletView(input: DashboardViewInput): PortletView {
+  const pinned = pinnedConfigurationOf(input);
+  if (pinned.kind === "floor") return pinned;
+  const cut = cutOf(pinned.configuration);
+  if (cut === null) return { kind: "floor", reason: "portlet-cut-unreadable" };
+  if (!isRecord(pinned.configuration.configuration)) {
+    return { kind: "floor", reason: "configuration-not-object" };
+  }
+  const body = composableBodyOf(pinned.configuration.configuration);
+  if (body.kind === "floor") return body;
+  const entry = body.portlets.find((portlet) => portlet.id === cut.portletInstanceId);
+  if (entry === undefined) return { kind: "floor", reason: "portlet-entry-missing" };
+  const snapshot = input as Record<string, unknown>;
+  return {
+    kind: "portlet",
+    revisionId: pinned.revisionId,
+    cut,
+    configuration: body.configuration,
+    title: entry.title,
+    dataRoad: dataRoadOf(snapshot.data),
+    openLive: openLiveOf(snapshot.review, snapshot.artifact),
   };
 }

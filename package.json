@@ -57,7 +57,8 @@
             "entry": "./src/renderers/detail.tsx",
             "propsApiVersion": 5,
             "representations": [
-              "application/vnd.cinatra.dashboard+json"
+              "application/vnd.cinatra.dashboard+json",
+              "application/vnd.cinatra.dashboard-portlet+json"
             ]
           }
         }
@@ -117,6 +118,69 @@
               "artifactType",
               "dashboardId",
               "status",
+              "mime",
+              "size",
+              "originKind",
+              "latestRepresentationRevisionId"
+            ],
+            "additionalProperties": true
+          }
+        },
+        {
+          "type": "@cinatra-ai/dashboard-artifact:portlet",
+          "claim": "dedicated",
+          "dispositions": {
+            "projection": "artifact-safe",
+            "pinnable": false,
+            "snapshotPolicy": "metadata",
+            "sensitivity": "normal"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "artifactType": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "dashboardId": {
+                "type": "string"
+              },
+              "portletInstanceId": {
+                "type": "string"
+              },
+              "dashboardRevisionId": {
+                "type": "string"
+              },
+              "mime": {
+                "type": "string",
+                "const": "application/vnd.cinatra.dashboard-portlet+json"
+              },
+              "size": {
+                "type": "number"
+              },
+              "originKind": {
+                "type": "string"
+              },
+              "latestRepresentationRevisionId": {
+                "type": "string"
+              },
+              "latestDigest": {
+                "type": "string"
+              },
+              "viewerHint": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifactType",
+              "dashboardId",
+              "portletInstanceId",
+              "dashboardRevisionId",
               "mime",
               "size",
               "originKind",

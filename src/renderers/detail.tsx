@@ -30,40 +30,147 @@
 // claim about a remote effect, and "A display draws no typed sentence when a fact
 // it needs is missing" (specs/app-artifact-review.html §XI). The host hands no
 // `review.effect.record` at this props version, so the sentence is not drawn.
+//
+// THE PORTLET (specs/app-artifact-review.html §XI.6): the same renderer draws a
+// row of the portlet type as ONE entry of a dashboard, through the composition's
+// single-portlet view, with the line that says which dashboard, which dashboard
+// revision and which entry it was cut from. The configuration is frozen and the
+// numbers are live, on the dashboard's rule, and the live dashboard link follows
+// the dashboard's rule too: inside a review it is drawn only once the review is
+// continued. The branch reads the row's object type and nothing else.
 
 import type { ReactElement } from "react";
 
-import { ReadOnlyComposedDashboard } from "@cinatra-ai/sdk-dashboard/components";
+import { ReadOnlyComposedDashboard, ReadOnlySinglePortlet } from "@cinatra-ai/sdk-dashboard/components";
 
 import {
   ARTIFACT_RENDERER_PROPS_API_VERSION,
   type ArtifactRendererProps,
 } from "../artifact-renderer-props";
-import { dashboardFloorMessage, resolveDashboardView } from "../dashboard-view";
+import {
+  dashboardFloorMessage,
+  isPortletSnapshot,
+  resolveDashboardView,
+  resolvePortletView,
+  type DashboardFloorReason,
+  type FloorSubject,
+  type PortletCut,
+} from "../dashboard-view";
 import OpenLiveLink from "./open-live-link";
 import ReadingLine from "./reading-line";
 
 const DISPLAY_ID = "dashboard-display";
+const PORTLET_DISPLAY_ID = "portlet-display";
+const ENTRY_BINDING = "entry=representation.portlet-instance-id";
 const LAYOUT_BINDING = "layout=representation.pinned-configuration";
 
 const NO_SERIES_STATUS =
   "No series — this reader has no live data for this dashboard here. The layout is the pinned one; the numbers are not shown. Configuration frozen at this revision · no numbers were read.";
 
-export default function DashboardArtifactDetail(props: ArtifactRendererProps): ReactElement {
-  const view = resolveDashboardView(props);
+function Floor({
+  displayId,
+  reason,
+  subject,
+}: {
+  displayId: string;
+  reason: DashboardFloorReason;
+  subject: FloorSubject;
+}): ReactElement {
+  return (
+    <article
+      className="soft-panel rounded-card overflow-hidden p-6"
+      data-conformance-id={displayId}
+      data-kind="artifact"
+      data-dashboard-artifact="floor"
+      data-dashboard-floor={reason}
+      data-props-api-version={ARTIFACT_RENDERER_PROPS_API_VERSION}
+    >
+      <p className="text-sm text-muted-foreground">{dashboardFloorMessage(reason, subject)}</p>
+    </article>
+  );
+}
+
+/** "Cut from <dashboard> at revision <revision> · entry <instance id>": the way
+ * back to where the portlet came from. */
+function CutLine({ cut }: { cut: PortletCut }): ReactElement {
+  return (
+    <span data-portlet-cut="" data-dashboard-id={cut.dashboardId}>
+      {"Cut from "}
+      <b className="font-semibold text-foreground">{cut.dashboardTitle}</b>
+      {" at revision "}
+      <span className="font-mono">{cut.dashboardRevisionId}</span>
+      {" · entry "}
+      <span className="font-mono" data-field={ENTRY_BINDING}>
+        {cut.portletInstanceId}
+      </span>
+    </span>
+  );
+}
+
+function PortletDetail(props: ArtifactRendererProps): ReactElement {
+  const view = resolvePortletView(props);
   if (view.kind === "floor") {
+    return <Floor displayId={PORTLET_DISPLAY_ID} reason={view.reason} subject="portlet" />;
+  }
+
+  if (view.dataRoad === null) {
+    // The no-series reading of the one entry, on the dashboard's rule: its title,
+    // an em dash in the number's place and an empty bar, and no composition.
     return (
       <article
-        className="soft-panel rounded-card overflow-hidden p-6"
-        data-conformance-id={DISPLAY_ID}
+        className="overflow-hidden"
+        data-conformance-id={PORTLET_DISPLAY_ID}
         data-kind="artifact"
-        data-dashboard-artifact="floor"
-        data-dashboard-floor={view.reason}
+        data-dashboard-artifact="no-series"
+        data-revision={view.revisionId}
         data-props-api-version={ARTIFACT_RENDERER_PROPS_API_VERSION}
       >
-        <p className="text-sm text-muted-foreground">{dashboardFloorMessage(view.reason)}</p>
+        <div className="soft-panel rounded-card p-4" data-dashboard-tile="">
+          <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+            {view.title}
+          </p>
+          <p className="text-[19px] font-bold text-muted-foreground">—</p>
+          <div aria-hidden="true" className="mt-2 h-1 rounded-sm bg-muted" />
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          <CutLine cut={view.cut} />
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground" role="status">
+          {NO_SERIES_STATUS}
+        </p>
+        {view.openLive !== null ? (
+          <p className="mt-1 text-xs">
+            <OpenLiveLink href={view.openLive} />
+          </p>
+        ) : null}
       </article>
     );
+  }
+
+  return (
+    <article
+      className="overflow-hidden"
+      data-conformance-id={PORTLET_DISPLAY_ID}
+      data-kind="artifact"
+      data-dashboard-artifact="portlet"
+      data-revision={view.revisionId}
+      data-props-api-version={ARTIFACT_RENDERER_PROPS_API_VERSION}
+    >
+      <ReadOnlySinglePortlet
+        config={view.configuration}
+        portletId={view.cut.portletInstanceId}
+        dataRoad={view.dataRoad}
+      />
+      <ReadingLine openLive={view.openLive} cut={<CutLine cut={view.cut} />} />
+    </article>
+  );
+}
+
+export default function DashboardArtifactDetail(props: ArtifactRendererProps): ReactElement {
+  if (isPortletSnapshot(props)) return <PortletDetail {...props} />;
+  const view = resolveDashboardView(props);
+  if (view.kind === "floor") {
+    return <Floor displayId={DISPLAY_ID} reason={view.reason} subject="dashboard" />;
   }
 
   if (view.dataRoad === null) {
