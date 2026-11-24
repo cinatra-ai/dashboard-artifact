@@ -338,6 +338,8 @@ describe("the six readings of the dashboard display", () => {
   it("draws no continuation sentence: the host hands no effect record", () => {
     const { container } = render(<Detail {...props(undefined, { artifact, review: CONTINUED })} />);
     expect(container.textContent ?? "").not.toContain("live from here");
-    expect(container.querySelector('[data-conformance-id="dashboard-continued-reading"]')).toBeNull();
+    // The continued reading's anchor is drawn, and draws no words
+    // (tests/dashboard-continued-reading.test.tsx).
+    expect(container.querySelector('[data-conformance-id="dashboard-continued-reading"]')?.textContent).toBe("");
   });
 });
