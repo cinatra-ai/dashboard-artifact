@@ -4,7 +4,7 @@
 // WHY THIS FILE EXISTS. The host serves that one module to this package's
 // display: it compiles the display from this package's source and resolves the
 // specifier through its own path map. Standalone nothing resolves it, so the
-// package declares the one export it consumes, with the props the display
+// package declares the two exports it consumes, with the props the display
 // passes, here, for its OWN standalone `tsc` only.
 //
 // WHY IT LIVES UNDER `src/__tests__/fixtures/` AND NOWHERE ELSE. An ambient
@@ -34,6 +34,14 @@ declare module "@cinatra-ai/sdk-dashboard/components" {
   };
   export function ReadOnlyComposedDashboard(props: {
     config: DashboardConfig;
+    dataRoad?: { readonly road: "session"; readonly apiUrl: string };
+  }): import("react").ReactElement;
+  // ONE portlet of the configuration, narrowed by the composition to the entry
+  // `portletId` names (cinatra packages/sdk-dashboard
+  // src/components/read-only-composition.tsx `ReadOnlySinglePortletProps`).
+  export function ReadOnlySinglePortlet(props: {
+    config: DashboardConfig;
+    portletId: string;
     dataRoad?: { readonly road: "session"; readonly apiUrl: string };
   }): import("react").ReactElement;
 }

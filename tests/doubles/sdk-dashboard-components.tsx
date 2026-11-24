@@ -12,3 +12,7 @@ import type { ReactElement } from "react";
 export function ReadOnlyComposedDashboard(props: Record<string, unknown>): ReactElement {
   return <div data-double="read-only-composed-dashboard">{JSON.stringify(props)}</div>;
 }
+
+export function ReadOnlySinglePortlet(props: Record<string, unknown>): ReactElement {
+  return <div data-double="read-only-single-portlet">{JSON.stringify(props)}</div>;
+}

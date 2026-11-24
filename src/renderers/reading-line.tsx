@@ -7,8 +7,11 @@
 //
 // The line draws the one live-dashboard link only when it is handed an address,
 // which the view resolver hands it unless a review is still open.
+//
+// The portlet display (specs/app-artifact-review.html §XI.6) hands it a `cut`
+// line too, drawn first in the same paragraph, above the reading.
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 
 import OpenLiveLink from "./open-live-link";
 
@@ -21,7 +24,13 @@ export function localClock(now: Date): string {
   return `${twoDigits(now.getHours())}:${twoDigits(now.getMinutes())}`;
 }
 
-export default function ReadingLine({ openLive }: { openLive: string | null }): ReactElement {
+export default function ReadingLine({
+  openLive,
+  cut = null,
+}: {
+  openLive: string | null;
+  cut?: ReactNode;
+}): ReactElement {
   const [stamp, setStamp] = useState<string | null>(null);
   useEffect(() => {
     setStamp(localClock(new Date()));
@@ -29,6 +38,12 @@ export default function ReadingLine({ openLive }: { openLive: string | null }): 
 
   return (
     <p className="mt-3 text-xs text-muted-foreground" data-dashboard-reading-line="">
+      {cut !== null ? (
+        <>
+          {cut}
+          <br />
+        </>
+      ) : null}
       <span data-dashboard-reading="">
         {"Configuration frozen at this revision · numbers as of "}
         <time>{stamp ?? ""}</time>
