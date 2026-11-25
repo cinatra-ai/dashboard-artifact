@@ -42,6 +42,9 @@ import {
 import { dashboardFloorMessage, resolveDashboardView } from "../dashboard-view";
 import OpenLiveLink from "./open-live-link";
 import ReadingLine from "./reading-line";
+// The continued reading's anchor: no words and no box, last inside the display,
+// once the review is continued (specs/app-artifact-review.html §XI.5).
+import ContinuedReading from "./continued-reading";
 
 const DISPLAY_ID = "dashboard-display";
 const LAYOUT_BINDING = "layout=representation.pinned-configuration";
@@ -106,6 +109,7 @@ export default function DashboardArtifactDetail(props: ArtifactRendererProps): R
             <OpenLiveLink href={view.openLive} />
           </p>
         ) : null}
+        <ContinuedReading review={props.review} />
       </article>
     );
   }
@@ -123,6 +127,7 @@ export default function DashboardArtifactDetail(props: ArtifactRendererProps): R
         <ReadOnlyComposedDashboard config={view.configuration} dataRoad={view.dataRoad} />
       </div>
       <ReadingLine openLive={view.openLive} />
+      <ContinuedReading review={props.review} />
     </article>
   );
 }

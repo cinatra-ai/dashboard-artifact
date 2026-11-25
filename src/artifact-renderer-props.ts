@@ -122,6 +122,10 @@ export interface ArtifactRendererProps {
   review?: {
     reading: "pending" | "continued";
     openLive: string | null;
+    /** Version 5, the continued reading only: the decision time of the reviewed
+     * revision, an ISO instant. ABSENT while the review is open, and absent
+     * where the host could not read the decision. */
+    decidedAt?: string;
   };
   /**
    * THE DATA ROAD (version 3): the address this display's live series are
