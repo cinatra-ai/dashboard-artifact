@@ -45,6 +45,9 @@
       "name": "Cinatra"
     },
     "dependencies": [],
+    "roles": [
+      "artifact-dashboard-twin"
+    ],
     "artifact": {
       "accepts": {
         "dashboard": true
