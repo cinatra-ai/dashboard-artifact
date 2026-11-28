@@ -71,6 +71,12 @@ describe("package.json manifest — the generic dashboard-artifact identity", ()
     expect(pkg.cinatra.dependencies).toEqual([]);
   });
 
+  // cinatra#4849: the host finds the type that twins a core dashboard record by
+  // this role, never by the package name or the type id.
+  it("claims the artifact-dashboard-twin role", () => {
+    expect((pkg.cinatra as { roles?: unknown }).roles).toEqual(["artifact-dashboard-twin"]);
+  });
+
   it("declares only the allowed cinatra.* keys", () => {
     for (const k of Object.keys(pkg.cinatra)) {
       expect(ARTIFACT_ALLOWED_CINATRA_KEYS.has(k)).toBe(true);
